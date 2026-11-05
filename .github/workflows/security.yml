@@ -27,33 +27,35 @@ jobs:
           ghcr.io/gitleaks/gitleaks:v8.30.1
           git --redact --no-banner .
 
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.25.0
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: pnpm
 
-      - name: Install pinned pnpm
-        run: |
-          corepack enable
-          corepack prepare pnpm@11.25.0 --activate
-          corepack pnpm --version
+      - name: Verify pinned pnpm
+        run: pnpm --version
 
       - name: Install dependencies
-        run: corepack pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile
 
       - name: Lint OpenAPI contract with Spectral
-        run: corepack pnpm lint:openapi
+        run: pnpm lint:openapi
 
       - name: Run integration tests
-        run: corepack pnpm test
+        run: pnpm test
 
       - name: Type-check TypeScript
-        run: corepack pnpm typecheck
+        run: pnpm typecheck
 
       - name: Start the synthetic loopback API
         run: |
-          TASK4_HOST=127.0.0.1 TASK4_PORT=3001 corepack pnpm start > /tmp/task4-api.log 2>&1 &
+          TASK4_HOST=127.0.0.1 TASK4_PORT=3001 pnpm start > /tmp/task4-api.log 2>&1 &
           for attempt in $(seq 1 30); do
             if curl --fail --silent http://127.0.0.1:3001/health >/dev/null; then
               echo "Synthetic API is ready."
