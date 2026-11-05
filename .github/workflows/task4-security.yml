@@ -37,6 +37,7 @@ jobs:
         with:
           node-version: "22"
           cache: pnpm
+          cache-dependency-path: task4-public-endpoint-shielding/pnpm-lock.yaml
 
       - name: Verify pinned pnpm
         run: pnpm --version
