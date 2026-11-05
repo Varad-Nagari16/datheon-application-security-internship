@@ -1,0 +1,358 @@
+openapi: 3.1.0
+info:
+  title: Synthetic Public Credential Verification API
+  version: 1.0.0
+  description: Public demo endpoints return minimized credential status and dynamically masked contact details. All records are fictional.
+  contact:
+    name: Task 4 Training Lab
+    email: security@example.test
+tags:
+  - name: Info
+    description: Public portal and local service status.
+  - name: Credentials
+    description: Synthetic credential lookup and verification operations.
+servers:
+  - url: http://127.0.0.1:3001
+    description: Local-only training service
+paths:
+  /:
+    get:
+      operationId: publicVerificationPortal
+      tags: [Info]
+      summary: Serve the public credential lookup page
+      description: Returns a local HTML form that calls the same-origin masked lookup API; it contains no contact records.
+      responses:
+        '200':
+          $ref: '#/components/responses/PublicPortal'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /health:
+    get:
+      operationId: healthCheck
+      tags: [Info]
+      summary: Return local service health
+      description: Returns only a generic health status and does not access credential records.
+      responses:
+        '200':
+          $ref: '#/components/responses/Health'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/public/lookup/{referenceId}:
+    get:
+      operationId: publicCredentialLookup
+      tags: [Credentials]
+      summary: Look up a synthetic credential using its public reference
+      description: Returns credential type and status with dynamically masked email and phone. No name, address, or full contact value is returned.
+      parameters:
+        - $ref: '#/components/parameters/ReferenceId'
+      responses:
+        '200':
+          $ref: '#/components/responses/MaskedLookup'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/public/verify/{referenceId}:
+    get:
+      operationId: publicCredentialVerification
+      tags: [Credentials]
+      summary: Verify a synthetic credential reference
+      description: Returns a validity result and the same dynamically masked contact shape used by the lookup endpoint.
+      parameters:
+        - $ref: '#/components/parameters/ReferenceId'
+      responses:
+        '200':
+          $ref: '#/components/responses/MaskedVerification'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+components:
+  parameters:
+    ReferenceId:
+      name: referenceId
+      in: path
+      required: true
+      description: Synthetic public reference ID; not an account identifier.
+      schema:
+        type: string
+        pattern: '^[A-Z0-9-]{5,32}$'
+      example: CERT-1042
+  headers:
+    CacheControl:
+      description: Prevents browser and shared-cache persistence of lookup responses.
+      schema:
+        type: string
+        const: no-store
+      example: no-store
+    ContentSecurityPolicy:
+      description: Restrictive policy permitting only same-origin portal assets and same-origin API requests; inline code and third-party resources remain blocked.
+      schema:
+        type: string
+      example: "default-src 'none'; base-uri 'none'; connect-src 'self'; font-src 'none'; form-action 'none'; frame-ancestors 'none'; img-src 'none'; manifest-src 'none'; media-src 'none'; object-src 'none'; script-src 'self'; script-src-attr 'none'; style-src 'self'; style-src-attr 'none'; worker-src 'none'"
+    StrictTransportSecurity:
+      description: Requires HTTPS on a deployed TLS origin; the local HTTP demo is not a production HTTPS service.
+      schema:
+        type: string
+      example: "max-age=31536000; includeSubDomains"
+    XContentTypeOptions:
+      description: Prevents MIME sniffing.
+      schema:
+        type: string
+        const: nosniff
+      example: nosniff
+    XFrameOptions:
+      description: Prevents framing in legacy browsers.
+      schema:
+        type: string
+        const: DENY
+      example: DENY
+    ReferrerPolicy:
+      description: Prevents sending referrer data with public lookups.
+      schema:
+        type: string
+        const: no-referrer
+      example: no-referrer
+    PermissionsPolicy:
+      description: Disables browser features not used by this API.
+      schema:
+        type: string
+        const: 'camera=(), microphone=(), geolocation=(), payment=()'
+      example: 'camera=(), microphone=(), geolocation=(), payment=()'
+    CrossOriginResourcePolicy:
+      description: Restricts resource use to the same origin.
+      schema:
+        type: string
+        const: same-origin
+      example: same-origin
+  schemas:
+    MaskedContact:
+      type: object
+      additionalProperties: false
+      required: [email, phone]
+      properties:
+        email:
+          type: string
+          pattern: '^[A-Za-z]\*{3}[A-Za-z]?@example\.test$'
+          example: a***n@example.test
+        phone:
+          type: string
+          pattern: '^\*{4,}[0-9]{4}$'
+          example: '*******0142'
+    PublicLookupResponse:
+      type: object
+      additionalProperties: false
+      required: [referenceId, credentialType, status, issuedYear, contact]
+      properties:
+        referenceId:
+          type: string
+          example: CERT-1042
+        credentialType:
+          type: string
+          example: Diploma in Network Security
+        status:
+          type: string
+          enum: [verified, pending]
+        issuedYear:
+          type: integer
+          example: 2024
+        contact:
+          $ref: '#/components/schemas/MaskedContact'
+    PublicVerificationResponse:
+      type: object
+      additionalProperties: false
+      required: [referenceId, valid, status, contact]
+      properties:
+        referenceId:
+          type: string
+          example: CERT-1042
+        valid:
+          type: boolean
+          example: true
+        status:
+          type: string
+          enum: [verified, pending]
+        contact:
+          $ref: '#/components/schemas/MaskedContact'
+    HealthResponse:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status:
+          type: string
+          const: ok
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: string
+          enum: [Invalid reference, Not found, Internal Server Error]
+  responses:
+    PublicPortal:
+      description: Public lookup form; personal contact values are fetched only after a user submits a reference and remain masked.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControl'
+        Content-Security-Policy:
+          $ref: '#/components/headers/ContentSecurityPolicy'
+        Strict-Transport-Security:
+          $ref: '#/components/headers/StrictTransportSecurity'
+        X-Content-Type-Options:
+          $ref: '#/components/headers/XContentTypeOptions'
+        X-Frame-Options:
+          $ref: '#/components/headers/XFrameOptions'
+        Referrer-Policy:
+          $ref: '#/components/headers/ReferrerPolicy'
+        Permissions-Policy:
+          $ref: '#/components/headers/PermissionsPolicy'
+        Cross-Origin-Resource-Policy:
+          $ref: '#/components/headers/CrossOriginResourcePolicy'
+      content:
+        text/html:
+          schema:
+            type: string
+    Health:
+      description: Local service health status.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControl'
+        Content-Security-Policy:
+          $ref: '#/components/headers/ContentSecurityPolicy'
+        Strict-Transport-Security:
+          $ref: '#/components/headers/StrictTransportSecurity'
+        X-Content-Type-Options:
+          $ref: '#/components/headers/XContentTypeOptions'
+        X-Frame-Options:
+          $ref: '#/components/headers/XFrameOptions'
+        Referrer-Policy:
+          $ref: '#/components/headers/ReferrerPolicy'
+        Permissions-Policy:
+          $ref: '#/components/headers/PermissionsPolicy'
+        Cross-Origin-Resource-Policy:
+          $ref: '#/components/headers/CrossOriginResourcePolicy'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/HealthResponse'
+    MaskedLookup:
+      description: Found synthetic credential with only masked contact values.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControl'
+        Content-Security-Policy:
+          $ref: '#/components/headers/ContentSecurityPolicy'
+        Strict-Transport-Security:
+          $ref: '#/components/headers/StrictTransportSecurity'
+        X-Content-Type-Options:
+          $ref: '#/components/headers/XContentTypeOptions'
+        X-Frame-Options:
+          $ref: '#/components/headers/XFrameOptions'
+        Referrer-Policy:
+          $ref: '#/components/headers/ReferrerPolicy'
+        Permissions-Policy:
+          $ref: '#/components/headers/PermissionsPolicy'
+        Cross-Origin-Resource-Policy:
+          $ref: '#/components/headers/CrossOriginResourcePolicy'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PublicLookupResponse'
+    MaskedVerification:
+      description: Found synthetic credential with a validity result and only masked contact values.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControl'
+        Content-Security-Policy:
+          $ref: '#/components/headers/ContentSecurityPolicy'
+        Strict-Transport-Security:
+          $ref: '#/components/headers/StrictTransportSecurity'
+        X-Content-Type-Options:
+          $ref: '#/components/headers/XContentTypeOptions'
+        X-Frame-Options:
+          $ref: '#/components/headers/XFrameOptions'
+        Referrer-Policy:
+          $ref: '#/components/headers/ReferrerPolicy'
+        Permissions-Policy:
+          $ref: '#/components/headers/PermissionsPolicy'
+        Cross-Origin-Resource-Policy:
+          $ref: '#/components/headers/CrossOriginResourcePolicy'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PublicVerificationResponse'
+    BadRequest:
+      description: Malformed reference; no implementation details are returned.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControl'
+        Content-Security-Policy:
+          $ref: '#/components/headers/ContentSecurityPolicy'
+        Strict-Transport-Security:
+          $ref: '#/components/headers/StrictTransportSecurity'
+        X-Content-Type-Options:
+          $ref: '#/components/headers/XContentTypeOptions'
+        X-Frame-Options:
+          $ref: '#/components/headers/XFrameOptions'
+        Referrer-Policy:
+          $ref: '#/components/headers/ReferrerPolicy'
+        Permissions-Policy:
+          $ref: '#/components/headers/PermissionsPolicy'
+        Cross-Origin-Resource-Policy:
+          $ref: '#/components/headers/CrossOriginResourcePolicy'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Unknown reference; same generic message across lookup and verification routes.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControl'
+        Content-Security-Policy:
+          $ref: '#/components/headers/ContentSecurityPolicy'
+        Strict-Transport-Security:
+          $ref: '#/components/headers/StrictTransportSecurity'
+        X-Content-Type-Options:
+          $ref: '#/components/headers/XContentTypeOptions'
+        X-Frame-Options:
+          $ref: '#/components/headers/XFrameOptions'
+        Referrer-Policy:
+          $ref: '#/components/headers/ReferrerPolicy'
+        Permissions-Policy:
+          $ref: '#/components/headers/PermissionsPolicy'
+        Cross-Origin-Resource-Policy:
+          $ref: '#/components/headers/CrossOriginResourcePolicy'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ServerError:
+      description: Generic internal error; no stack trace or database detail is returned.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControl'
+        Content-Security-Policy:
+          $ref: '#/components/headers/ContentSecurityPolicy'
+        Strict-Transport-Security:
+          $ref: '#/components/headers/StrictTransportSecurity'
+        X-Content-Type-Options:
+          $ref: '#/components/headers/XContentTypeOptions'
+        X-Frame-Options:
+          $ref: '#/components/headers/XFrameOptions'
+        Referrer-Policy:
+          $ref: '#/components/headers/ReferrerPolicy'
+        Permissions-Policy:
+          $ref: '#/components/headers/PermissionsPolicy'
+        Cross-Origin-Resource-Policy:
+          $ref: '#/components/headers/CrossOriginResourcePolicy'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'

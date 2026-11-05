@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f5f8f7">
+    <meta name="description" content="Verify a credential using its public reference. Contact details are masked.">
+    <title>Northstar Verify — Public Credential Check</title>
+    <link rel="stylesheet" href="/styles.css">
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="Northstar Verify home">
+        <span class="brand-mark" aria-hidden="true">N</span>
+        <span class="brand-name">NORTHSTAR <b>VERIFY</b></span>
+      </a>
+      <div class="availability"><span class="availability-dot" aria-hidden="true"></span> Public verification</div>
+    </header>
+
+    <main class="page-shell">
+      <section class="intro" aria-labelledby="page-title">
+        <p class="eyebrow"><span class="eyebrow-line" aria-hidden="true"></span> CREDENTIAL SERVICES</p>
+        <h1 id="page-title">Proof, without <span>oversharing.</span></h1>
+        <p class="intro-copy">Check a credential with its public reference. You’ll see the verification status and only the contact details needed to recognize the record.</p>
+        <div class="privacy-callout">
+          <span class="privacy-icon" aria-hidden="true">✓</span>
+          <p><strong>Privacy by design</strong><br>Names and full contact details are not shown on this public page.</p>
+        </div>
+        <p class="training-label">Local training demonstration · fictional records only</p>
+      </section>
+
+      <section class="lookup-card" aria-labelledby="lookup-title">
+        <div class="card-heading">
+          <div>
+            <p class="card-kicker">PUBLIC RECORD CHECK <span>01</span></p>
+            <h2 id="lookup-title">Verify a credential</h2>
+          </div>
+          <span class="card-emblem" aria-hidden="true">N</span>
+        </div>
+
+        <form id="lookup-form" novalidate>
+          <label for="reference-id">Credential reference</label>
+          <div class="input-wrap">
+            <input
+              id="reference-id"
+              name="referenceId"
+              type="text"
+              inputmode="text"
+              placeholder="CERT-1042"
+              minlength="5"
+              maxlength="32"
+              pattern="[A-Za-z0-9-]{5,32}"
+              autocomplete="off"
+              autocapitalize="characters"
+              spellcheck="false"
+              required
+              aria-describedby="reference-help"
+            >
+          </div>
+          <p class="field-help" id="reference-help">Enter the public reference printed on the credential. Try <code>CERT-1042</code>.</p>
+          <button class="submit-button" id="submit-button" type="submit">
+            <span class="button-label">Check credential</span>
+            <span class="button-arrow" aria-hidden="true">→</span>
+          </button>
+        </form>
+
+        <p class="feedback" id="feedback" role="status" aria-live="polite" hidden></p>
+
+        <section class="result-panel" id="result-panel" aria-labelledby="result-title" aria-live="polite" hidden>
+          <div class="result-heading">
+            <span class="status-pill" id="credential-status"></span>
+            <span class="result-reference" id="result-reference"></span>
+          </div>
+          <h3 id="result-title">Credential result</h3>
+          <p class="credential-type" id="credential-type"></p>
+          <dl class="result-details">
+            <div>
+              <dt>Issued</dt>
+              <dd id="issued-year"></dd>
+            </div>
+            <div>
+              <dt>Email</dt>
+              <dd id="masked-email"></dd>
+            </div>
+            <div>
+              <dt>Phone</dt>
+              <dd id="masked-phone"></dd>
+            </div>
+          </dl>
+          <p class="result-footnote">Contact values are masked in this public result.</p>
+        </section>
+
+        <div class="card-footer">
+          <span class="mini-shield" aria-hidden="true">✓</span>
+          Only the public verification result is returned.
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <span>Northstar Verify <span class="footer-divider">/</span> Local security training lab</span>
+      <nav aria-label="Service links">
+        <a href="/health">Service status</a>
+        <a href="/api/public/lookup/CERT-1042">API sample</a>
+      </nav>
+    </footer>
+  </body>
+</html>

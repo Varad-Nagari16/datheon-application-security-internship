@@ -1,0 +1,89 @@
+name: Task 4 API Security
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  public-api-security:
+    name: Secret scan, contract checks, tests, and ZAP DAST
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout full history for secret scanning
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Scan Git history for exposed secrets (redacted)
+        run: >-
+          docker run --rm
+          -v "$GITHUB_WORKSPACE:/repo"
+          -w /repo
+          ghcr.io/gitleaks/gitleaks:v8.30.1
+          git --redact --no-banner .
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - name: Install pinned pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@11.25.0 --activate
+          corepack pnpm --version
+
+      - name: Install dependencies
+        run: corepack pnpm install --frozen-lockfile
+
+      - name: Lint OpenAPI contract with Spectral
+        run: corepack pnpm lint:openapi
+
+      - name: Run integration tests
+        run: corepack pnpm test
+
+      - name: Type-check TypeScript
+        run: corepack pnpm typecheck
+
+      - name: Start the synthetic loopback API
+        run: |
+          TASK4_HOST=127.0.0.1 TASK4_PORT=3001 corepack pnpm start > /tmp/task4-api.log 2>&1 &
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:3001/health >/dev/null; then
+              echo "Synthetic API is ready."
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/task4-api.log
+          exit 1
+
+      - name: Scan local OpenAPI service with OWASP ZAP
+        run: |
+          mkdir -p artifacts
+          chmod 777 artifacts
+          docker run --rm --network host \
+            -v "$GITHUB_WORKSPACE:/zap/wrk/:rw" \
+            -t ghcr.io/zaproxy/zaproxy:stable \
+            zap-api-scan.py \
+              -t /zap/wrk/openapi.yaml \
+              -f openapi \
+              -c /zap/wrk/zap-rules.tsv \
+              -I \
+              -r /zap/wrk/artifacts/zap-report.html \
+              -J /zap/wrk/artifacts/zap-report.json
+
+      - name: Upload ZAP reports when created
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: task4-zap-api-report
+          path: artifacts/zap-report.*
+          if-no-files-found: ignore
+          retention-days: 14

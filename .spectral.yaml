@@ -1,0 +1,64 @@
+extends:
+  - spectral:oas
+rules:
+  masked-email-example:
+    description: Public email examples must be masked and use synthetic example domains.
+    severity: error
+    given: $.components.schemas.MaskedContact.properties.email.example
+    then:
+      function: pattern
+      functionOptions:
+        match: '^[A-Za-z]\*{3}[A-Za-z]?@example\.test$'
+  masked-phone-example:
+    description: Public phone examples must mask all but four digits.
+    severity: error
+    given: $.components.schemas.MaskedContact.properties.phone.example
+    then:
+      function: pattern
+      functionOptions:
+        match: '^\*{4,}[0-9]{4}$'
+  masked-contact-has-no-extra-fields:
+    description: Public contact schema may contain only masked email and phone fields.
+    severity: error
+    given: $.components.schemas.MaskedContact.properties
+    then:
+      function: schema
+      functionOptions:
+        schema:
+          type: object
+          required: [email, phone]
+          properties:
+            email:
+              type: object
+            phone:
+              type: object
+          additionalProperties: false
+  public-response-security-headers:
+    description: Every documented public API response has the required browser security headers.
+    severity: error
+    given: $.components.responses.*.headers
+    then:
+      - field: Cache-Control
+        function: truthy
+      - field: Content-Security-Policy
+        function: truthy
+      - field: Strict-Transport-Security
+        function: truthy
+      - field: X-Content-Type-Options
+        function: truthy
+      - field: X-Frame-Options
+        function: truthy
+      - field: Referrer-Policy
+        function: truthy
+      - field: Permissions-Policy
+        function: truthy
+      - field: Cross-Origin-Resource-Policy
+        function: truthy
+  cache-control-is-no-store:
+    description: Public lookup response examples must disable cache storage.
+    severity: error
+    given: $.components.headers.CacheControl.schema.example
+    then:
+      function: pattern
+      functionOptions:
+        match: '^no-store$'

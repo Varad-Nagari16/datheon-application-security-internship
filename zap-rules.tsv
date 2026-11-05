@@ -1,0 +1,8 @@
+# Rule ID, threshold, optional note. FAIL entries block the CI job.
+10015 FAIL Cache-Control header missing or incomplete
+10019 FAIL Content-Type header missing
+10020 FAIL Clickjacking headers missing
+10021 FAIL X-Content-Type-Options missing
+10035 FAIL Strict-Transport-Security missing
+10038 FAIL Content-Security-Policy missing
+90022 FAIL Server error disclosure
