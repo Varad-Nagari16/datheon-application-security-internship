@@ -1,0 +1,9 @@
+title = "Datheon internship synthetic-fixture Gitleaks policy"
+
+[allowlist]
+description = "These exact values are fictional training fixtures documented in Task 3; they are not credentials for any external system."
+regexTarget = "match"
+regexes = [
+  '''northstar-demo-2026''',
+  '''unit-test-jwt-secret-that-is-never-used-outside-tests''',
+]
