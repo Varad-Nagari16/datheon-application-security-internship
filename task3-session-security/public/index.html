@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f5f7fb" />
+    <meta name="description" content="Northstar Student Portal. Fictional application records for local security training." />
+    <title>Northstar Student Portal</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="Northstar Student Portal home">
+        <span class="brand-symbol" aria-hidden="true">N</span>
+        <span class="brand-copy"><strong>northstar</strong><small>STUDENT PORTAL</small></span>
+      </a>
+      <nav id="portal-navigation" class="portal-nav" aria-label="Account navigation" hidden>
+        <a id="my-application-link" href="/?appId=104" class="portal-nav-link">My application</a>
+        <div class="account-badge header-account">
+          <span class="avatar" id="header-avatar" aria-hidden="true">S</span>
+          <span><strong id="header-account-name">Student</strong><small>Student account</small></span>
+        </div>
+        <button id="signout-button" class="signout-button" type="button">Sign out <span aria-hidden="true">↗</span></button>
+      </nav>
+    </header>
+
+    <main>
+      <section id="signin-screen" class="signin-layout" aria-labelledby="signin-heading">
+        <div class="welcome-copy">
+          <p class="eyebrow">STUDENT SERVICES</p>
+          <h1>Your next step, <em>all in one place.</em></h1>
+          <p class="welcome-description">Sign in to view your application status and the details connected to your student account.</p>
+          <div class="privacy-note">
+            <span class="privacy-icon" aria-hidden="true">✓</span>
+            <span><strong>Your account, your information</strong><small>Application details are available only to the signed-in account.</small></span>
+          </div>
+        </div>
+
+        <form id="signin-form" class="signin-card" novalidate>
+          <p class="card-kicker">STUDENT ACCOUNT</p>
+          <h2 id="signin-heading">Sign in</h2>
+          <p class="signin-intro">Use one of the fictional training accounts described in the project guide.</p>
+          <label for="signin-email">Email address</label>
+          <input id="signin-email" name="email" type="email" autocomplete="username" required maxlength="254" />
+          <label for="signin-password">Password</label>
+          <input id="signin-password" name="password" type="password" autocomplete="current-password" required maxlength="256" />
+          <button id="signin-submit" class="primary-button" type="submit">Sign in <span aria-hidden="true">→</span></button>
+          <p id="signin-error" class="signin-error" role="alert" hidden></p>
+          <p class="demo-disclaimer"><span aria-hidden="true">●</span> Local training portal. All account information is fictional.</p>
+        </form>
+      </section>
+
+      <section id="dashboard-screen" class="dashboard-screen" aria-labelledby="dashboard-heading" hidden>
+        <div class="dashboard-topline">
+          <div class="breadcrumbs"><span>HOME</span><b>/</b><span>MY DASHBOARD</span></div>
+          <p id="rate-limit-status" class="rate-limit-status" aria-live="polite"></p>
+        </div>
+
+        <section class="dashboard-welcome">
+          <div>
+            <p class="eyebrow">MY STUDENT ACCOUNT</p>
+            <h1 id="dashboard-heading">Welcome back, <span id="welcome-name">Student</span></h1>
+            <p class="welcome-description">Here is the latest information linked to your account.</p>
+          </div>
+          <div class="account-badge"><span class="avatar" id="avatar-initial" aria-hidden="true">S</span><span><strong id="account-name">Student</strong><small>Student account</small></span></div>
+        </section>
+
+        <section class="dashboard-grid" aria-label="Your account overview">
+          <article class="portal-card profile-card">
+            <div class="section-heading"><div><p class="card-kicker">PERSONAL DETAILS</p><h2>My profile</h2></div><span class="card-icon" aria-hidden="true">◎</span></div>
+            <dl class="profile-list">
+              <div><dt>Full name</dt><dd id="profile-name">—</dd></div>
+              <div><dt>Email address</dt><dd id="profile-email">—</dd></div>
+              <div><dt>Program</dt><dd id="profile-program">—</dd></div>
+            </dl>
+          </article>
+
+          <article class="portal-card application-card">
+            <div class="section-heading"><div><p class="card-kicker">APPLICATION OVERVIEW</p><h2>My application</h2></div><span class="status-pill" id="application-status">Loading</span></div>
+            <div class="application-id-block"><span>APPLICATION ID</span><strong id="application-id">—</strong></div>
+            <div class="application-meta"><div><span>Program</span><strong id="application-program">—</strong></div><div><span>Intake</span><strong id="application-term">—</strong></div></div>
+            <p class="application-note" id="application-note">Your application details will appear here.</p>
+          </article>
+        </section>
+      </section>
+
+      <section id="not-found-screen" class="not-found-screen" aria-labelledby="not-found-heading" hidden>
+        <article class="not-found-card">
+          <span class="not-found-symbol" aria-hidden="true">!</span>
+          <p class="card-kicker">APPLICATION DETAILS</p>
+          <h1 id="not-found-heading">We couldn't find that application</h1>
+          <p>The application may no longer be available, or the address may be incorrect. Check the link or return to your account.</p>
+          <a id="return-to-application" class="primary-button return-button" href="/?appId=104">Return to my account <span aria-hidden="true">→</span></a>
+        </article>
+      </section>
+
+      <section id="service-error-screen" class="not-found-screen" aria-labelledby="service-error-heading" hidden>
+        <article class="not-found-card">
+          <span class="not-found-symbol" aria-hidden="true">!</span>
+          <p class="card-kicker">STUDENT SERVICES</p>
+          <h1 id="service-error-heading">We can't load your application right now</h1>
+          <p>Please try again in a moment.</p>
+          <a id="retry-application" class="primary-button return-button" href="/?appId=104">Try again <span aria-hidden="true">→</span></a>
+        </article>
+      </section>
+
+      <section id="rate-limit-screen" class="not-found-screen" aria-labelledby="rate-limit-heading" hidden>
+        <article class="not-found-card">
+          <span class="not-found-symbol" aria-hidden="true">…</span>
+          <p class="card-kicker">REQUEST LIMIT</p>
+          <h1 id="rate-limit-heading">Please wait before trying again</h1>
+          <p>This account has made several requests in a short period. Try again in about <strong id="rate-limit-retry">60</strong> seconds.</p>
+          <a id="rate-limit-return" class="primary-button return-button" href="/?appId=104">Return to my account <span aria-hidden="true">→</span></a>
+        </article>
+      </section>
+    </main>
+
+    <footer class="site-footer"><span>Northstar Student Services</span><span>Local training environment · Fictional information</span></footer>
+  </body>
+</html>

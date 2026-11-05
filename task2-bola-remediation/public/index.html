@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f5f7fb" />
+    <meta name="description" content="Northstar Student Portal. Fictional application records for local security training." />
+    <title>Northstar Student Portal</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/?appId=104" aria-label="Northstar Student Portal home">
+        <span class="brand-symbol" aria-hidden="true">N</span>
+        <span class="brand-copy"><strong>northstar</strong><small>STUDENT PORTAL</small></span>
+      </a>
+      <nav class="portal-nav" aria-label="Account navigation">
+        <a href="/?appId=104" class="portal-nav-link">My application</a>
+        <div class="header-account"><span class="avatar">A</span><span>Student A</span></div>
+      </nav>
+    </header>
+
+    <main>
+      <section id="dashboard-screen" class="dashboard-screen" aria-labelledby="dashboard-heading" hidden>
+        <div class="dashboard-topline">
+          <div class="breadcrumbs"><span>HOME</span><b>/</b><span>MY DASHBOARD</span></div>
+        </div>
+
+        <section class="dashboard-welcome">
+          <div>
+            <p class="eyebrow">MY STUDENT ACCOUNT</p>
+            <h1 id="dashboard-heading">Welcome back, <span id="welcome-name">Student A</span></h1>
+            <p class="welcome-description">Here is the latest information linked to your account.</p>
+          </div>
+          <div class="account-badge"><span class="avatar" id="avatar-initial">A</span><span><strong id="account-name">Student A</strong><small>Student account</small></span></div>
+        </section>
+
+        <section class="dashboard-grid" aria-label="Your account overview">
+          <article class="portal-card profile-card">
+            <div class="section-heading"><div><p class="card-kicker">PERSONAL DETAILS</p><h2>My profile</h2></div><span class="card-icon" aria-hidden="true">◎</span></div>
+            <dl class="profile-list">
+              <div><dt>Full name</dt><dd id="profile-name">—</dd></div>
+              <div><dt>Email address</dt><dd id="profile-email">—</dd></div>
+              <div><dt>Program</dt><dd id="profile-program">—</dd></div>
+            </dl>
+          </article>
+
+          <article class="portal-card application-card">
+            <div class="section-heading"><div><p class="card-kicker">APPLICATION OVERVIEW</p><h2>My application</h2></div><span class="status-pill" id="application-status">Loading</span></div>
+            <div class="application-id-block"><span>APPLICATION ID</span><strong id="application-id">104</strong></div>
+            <div class="application-meta"><div><span>Program</span><strong id="application-program">—</strong></div><div><span>Intake</span><strong id="application-term">—</strong></div></div>
+            <p class="application-note" id="application-note">Your application details will appear here.</p>
+          </article>
+        </section>
+      </section>
+
+      <section id="not-found-screen" class="not-found-screen" aria-labelledby="not-found-heading" hidden>
+        <article class="not-found-card">
+          <span class="not-found-symbol" aria-hidden="true">!</span>
+          <p class="card-kicker">APPLICATION DETAILS</p>
+          <h1 id="not-found-heading">We couldn't find that application</h1>
+          <p>The application may no longer be available, or the address may be incorrect. Check the link or return to your account.</p>
+          <a id="return-to-application" class="primary-button return-button" href="/?appId=104">Return to my account <span aria-hidden="true">→</span></a>
+        </article>
+      </section>
+    </main>
+
+    <footer class="site-footer"><span>Northstar Student Services</span><span>Local training environment · Fictional information</span></footer>
+  </body>
+</html>

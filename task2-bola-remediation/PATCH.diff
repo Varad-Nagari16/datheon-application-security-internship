@@ -1,0 +1,38 @@
+--- a/examples/vulnerable-before.ts
++++ b/src/routes/records.ts
+@@ -1,2 +1,3 @@
+-import type { RequestHandler } from "express";
+-import { trainingRecords } from "../src/records.js";
++import { Router } from "express";
++import { requireSession } from "../middleware/requireSession.js";
++import { trainingRecords } from "../records.js";
+@@ -4,3 +5,14 @@
+-/** Intentionally vulnerable example. This handler is not mounted by the app. */
+-export const vulnerableRecordHandler: RequestHandler = (req, res) => {
+-  // Flaw: a blind lookup uses only the caller-controlled record ID.
++export const recordsRouter = Router();
++
++recordsRouter.get("/:recordId", requireSession, (req, res) => {
++  const authenticatedUserId = req.authenticatedUser?.userId;
++
++  // Defense in depth: never continue to the record lookup without a principal.
++  if (!authenticatedUserId) {
++    res.status(401).json({ error: "Unauthorized" });
++    return;
++  }
++
++  // Equivalent to a database query filtered by BOTH object ID and owner ID.
++  // Returning the same 404 for absent and non-owned records avoids disclosing
++  // whether another user's record exists.
+@@ -8 +20,3 @@
+-    (candidate) => candidate.id === req.params.recordId,
++    (candidate) =>
++      candidate.id === req.params.recordId &&
++      candidate.ownerId === authenticatedUserId,
+@@ -16,3 +30,3 @@
+-  // No session check and no comparison with the authenticated record owner.
+-  res.status(200).json(record);
+-};
++  const { ownerId: _ownerId, ...publicRecord } = record;
++  res.status(200).json(publicRecord);
++});

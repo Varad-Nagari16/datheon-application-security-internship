@@ -1,0 +1,1917 @@
+[1mdiff --git a/.env.example b/.env.example[m
+[1mindex 98f1e0b..b365b34 100644[m
+[1m--- a/.env.example[m
+[1m+++ b/.env.example[m
+[36m@@ -1,3 +1,6 @@[m
+ # Replace this placeholder with: openssl rand -hex 32[m
+ BOLAGUARD_JWT_SECRET=replace-with-a-random-local-secret-before-running[m
+ DATABASE_PATH=data/bolaguard.sqlite[m
+[32m+[m[32mBOLAGUARD_HOST=127.0.0.1[m
+[32m+[m[32m# Local Kali/browser setup. Use 'none' only for a trusted HTTPS embedded preview.[m
+[32m+[m[32mBOLAGUARD_COOKIE_SAME_SITE=lax[m
+[1mdiff --git a/README.md b/README.md[m
+[1mindex f2348c7..3008fec 100644[m
+[1m--- a/README.md[m
+[1m+++ b/README.md[m
+[36m@@ -1,17 +1,14 @@[m
+[31m-# BOLA Guard Lab — Task 2[m
+[32m+[m[32m# BOLA Guard Lab — Tasks 2 and 3[m
+ [m
+[31m-A local Node.js/TypeScript training app for remediating Broken Object Level Authorization (BOLA/IDOR). It includes a student portal, a local SQLite database with five fictional accounts, salted password hashes, short-lived HS256 JWTs, an ownership-filtered API query, Vitest/Supertest coverage, and a remediation diff.[m
+[32m+[m[32mA local Node.js/TypeScript training app for BOLA/IDOR remediation and cryptographic session security. It uses a SQLite database containing five fictional accounts, salted password hashes, short-lived HMAC-SHA256 JWTs held only in an `HttpOnly` cookie, one-time token rotation, logout revocation, owner-filtered SQL, and in-memory sliding-window rate limiting.[m
+ [m
+[31m-> **Training only:** all users and records are synthetic. The shared demo password is public by design, and the JWT secret you create is only for this local lab. The server binds to loopback. Do not put real student/customer information in it, expose it to a network, or reuse any demo credential in a real service.[m
+[32m+[m[32m> **Training only:** all accounts and records are synthetic. The shared demo password is public by design, and the signing key you generate is only for this local lab. The app binds to loopback. Do not enter real personal information, expose it to a network, or reuse any demo credential in a real service.[m
+ [m
+[31m-## Requirements[m
+[32m+[m[32m## Requirements and setup[m
+ [m
+[31m-Use Node.js 22 or newer (Node 24 works), Corepack, and OpenSSL on Kali Linux. The app uses `better-sqlite3`; install dependencies once while online. After startup, the API and SQLite database operate locally.[m
+[32m+[m[32mUse Node.js 22 or newer (Node 24 works), Corepack, pnpm as pinned in `package.json`, and OpenSSL on Kali Linux. The app uses `better-sqlite3`; install dependencies once while online.[m
+ [m
+[31m-## Install and start[m
+[31m-[m
+[31m-1. Extract `task2-bola-guard-lab.zip` and open a terminal in the `bolaguard` directory.[m
+[31m-2. Check Node and Corepack, install dependencies, and create your local JWT secret:[m
+[32m+[m[32m1. Extract the ZIP, open a terminal in the `bolaguard` directory, and install the packages:[m
+ [m
+ ```bash[m
+ node --version[m
+[36m@@ -21,9 +18,9 @@[m [mcp .env.example .env[m
+ sed -i "s/^BOLAGUARD_JWT_SECRET=.*/BOLAGUARD_JWT_SECRET=$(openssl rand -hex 32)/" .env[m
+ ```[m
+ [m
+[31m-The `.env` file is ignored by Git and excluded from the ZIP. Do not paste its value into a report or chat. If OpenSSL is unavailable, use `python3 -c 'import secrets; print(secrets.token_hex(32))'` to make a 64-character hex key and place it after `BOLAGUARD_JWT_SECRET=` in `.env`.[m
+[32m+[m[32mThe `.env` file is ignored by Git and excluded from the ZIP. Never paste the generated value into a report or chat. If OpenSSL is unavailable, create a 64-character hex key with `python3 -c 'import secrets; print(secrets.token_hex(32))'` and put it after `BOLAGUARD_JWT_SECRET=` in `.env`. The local settings in `.env.example` bind the server to `BOLAGUARD_HOST=127.0.0.1` and set `BOLAGUARD_COOKIE_SAME_SITE=lax`; leave them that way on Kali. `Secure` is always set. For a trusted HTTPS deployment embedded cross-site, `SameSite=None; Secure` may be needed, but deployment is outside this assignment. Never change the local host to `0.0.0.0` or expose this training server to a network.[m
+ [m
+[31m-3. Run the tests and TypeScript check, then start the local app:[m
+[32m+[m[32m2. Run tests and start the local portal:[m
+ [m
+ ```bash[m
+ corepack pnpm test[m
+[36m@@ -31,13 +28,11 @@[m [mcorepack pnpm typecheck[m
+ corepack pnpm dev[m
+ ```[m
+ [m
+[31m-On first startup the app creates `data/bolaguard.sqlite`, creates its schema, and seeds five synthetic users and applications. The database file is ignored by Git and excluded from the ZIP.[m
+[31m-[m
+[31m-4. Open **http://127.0.0.1:3000/**. Stop the server with **Ctrl+C**. Check readiness at **http://127.0.0.1:3000/health**. If port 3000 is already used, start with `PORT=3001 corepack pnpm dev` and open **http://127.0.0.1:3001/**.[m
+[32m+[m[32mOn first startup, the app creates `data/bolaguard.sqlite`, creates its schema, and seeds five synthetic users and applications. The database file is ignored by Git and excluded from the ZIP. Open **http://127.0.0.1:3000/** and stop the server with **Ctrl+C**. Check readiness at **http://127.0.0.1:3000/health**. If port 3000 is occupied, run `PORT=3001 corepack pnpm dev` and use port 3001.[m
+ [m
+ ## Demo accounts[m
+ [m
+[31m-Use any row to sign in. These are fictional local training accounts; all share the same lab-only password.[m
+[32m+[m[32mAll five fictional accounts share the same lab-only password, `northstar-demo-2026`.[m
+ [m
+ | Account | Email | Own application URL |[m
+ |---|---|---|[m
+[36m@@ -47,85 +42,120 @@[m [mUse any row to sign in. These are fictional local training accounts; all share t[m
+ | Student D | `student.d@example.test` | `?appId=107` |[m
+ | Student E | `student.e@example.test` | `?appId=108` |[m
+ [m
+[31m-**Shared lab-only password:** `northstar-demo-2026`[m
+[32m+[m[32mThe password is salted and hashed before it is stored in SQLite. The server issues a 15-minute JWT signed with HMAC-SHA256 and puts it in the `northstar_session` cookie. The JWT is not returned in JSON, placed in a page URL, or stored in `localStorage`/`sessionStorage`. On reload, browser JavaScript asks the server for the current account; the browser automatically sends the cookie to same-origin API routes.[m
+ [m
+[31m-The password is salted and hashed before it is stored in SQLite. The app issues a signed JWT after sign-in; the browser keeps it in the current tab's `sessionStorage` and sends it as a Bearer token. The signing secret stays server-side in `.env`.[m
+[32m+[m[32m## Task 2: demonstrate BOLA prevention[m
+ [m
+[31m-## Browser reproduction: Student A tries Student B's application[m
+[32m+[m[32m1. Sign in as Student A with `student.a@example.test` and the shared demo password.[m
+[32m+[m[32m2. Student A's record is shown at a URL like `http://127.0.0.1:3000/?appId=104`.[m
+[32m+[m[32m3. Keep the same tab and session. Change only `104` to `105` in the address bar, then press **Enter**.[m
+[32m+[m[32m4. The request uses Student A's unchanged cookie session, but the database query matches both the requested application ID and the verified session owner. Student B's data is not returned; the portal shows the ordinary **“We couldn't find that application”** page.[m
+[32m+[m[32m5. Restore `appId=104` to return to Student A's record. To view another account's own record, sign out and sign in to that synthetic account. A URL is never an identity switch.[m
+ [m
+[31m-1. Sign in as Student A using `student.a@example.test` and the shared password above.[m
+[31m-2. Student A's own application appears at a URL like `http://127.0.0.1:3000/?appId=104`.[m
+[31m-3. Keep the same tab and session. In the browser address bar, change only `104` to `105`, then press **Enter**.[m
+[31m-4. The UI calls the API using the same Student A JWT, but the request for Student B's record is denied. The site displays a normal **“We couldn't find that application”** page; Student B's data is not shown.[m
+[31m-5. Restore `appId=104` to return to Student A's application. To see another account's own record, sign out and sign in with that account's email; do not use the URL as an identity switch.[m
+[32m+[m[32m## Task 3: why Web Storage is risky and how this lab protects the token[m
+ [m
+[31m-There is no account list or application-ID lookup field on the dashboard. The browser's logged-in account comes from the verified JWT; `appId` only selects the object being requested.[m
+[32m+[m[32m`localStorage` and `sessionStorage` are readable by JavaScript running in the page's origin. If an attacker can execute injected JavaScript through an XSS flaw, that script can read a bearer token saved there and exfiltrate it, potentially allowing use from another device until the token expires or is revoked. `sessionStorage` limits persistence to a browser tab, but it is still JavaScript-readable; it does not prevent token theft by XSS.[m
+ [m
+[31m-## Optional cURL verification[m
+[32m+[m[32mThis lab keeps the signed JWT in an `HttpOnly; Secure; SameSite=Lax` cookie. `HttpOnly` prevents normal page JavaScript from reading the cookie value, and `Secure` restricts browser cookie transmission to secure contexts. `SameSite=Lax` reduces some cross-site request risks. These controls do **not** eliminate XSS: injected same-origin JavaScript may still make authenticated requests as the victim even when it cannot read the cookie. Output encoding, safe DOM APIs, and an appropriate Content Security Policy remain important. `SameSite` is not a replacement for deliberate CSRF protection in a real application.[m
+ [m
+[31m-Run the following in a second terminal while the app is running. The first command signs in as Student A and saves the returned JWT in a shell variable without printing it:[m
+[32m+[m[32m### Session lifetime, rotation, and logout[m
+ [m
+[31m-```bash[m
+[31m-TOKEN=$(curl --noproxy '*' --max-time 10 -sS \[m
+[31m-  -H 'Content-Type: application/json' \[m
+[31m-  -d '{"email":"student.a@example.test","password":"northstar-demo-2026"}' \[m
+[31m-  http://127.0.0.1:3000/api/session \[m
+[31m-  | python3 -c 'import json,sys; print(json.load(sys.stdin)["accessToken"])')[m
+[31m-```[m
+[32m+[m[32mA JWT lasts 15 minutes. The portal rotates it automatically with `POST /api/session/rotate` before expiry (about ten minutes after issue). Rotation sets a new signed cookie and invalidates the previous token ID (JTI), so replay of the old cookie is rejected. A session has an eight-hour absolute maximum lifetime; rotation cannot extend it beyond that cap. Signing out revokes the in-memory session and clears the cookie with matching `HttpOnly`, `Secure`, path, and SameSite attributes. Missing, malformed, modified, expired, logged-out, and superseded cookies receive a generic `401 Unauthorized`.[m
+[32m+[m
+[32m+[m[32mThe session registry and limiter use in-memory state for a single local process. Restarting the app invalidates active demo sessions and resets counters. They are intentionally not durable or shared between multiple servers; a real multi-instance application would need a shared store such as Redis and a reviewed key/rotation policy.[m
+ [m
+[31m-Missing authentication returns `401`:[m
+[32m+[m[32m## Rate-limit demonstration[m
+[32m+[m
+[32m+[m[32mThe demo uses a sliding window of 60 seconds:[m
+[32m+[m
+[32m+[m[32m| Endpoint group | Key | Limit |[m
+[32m+[m[32m|---|---|---:|[m
+[32m+[m[32m| `POST /api/session` | Direct client IP | 5 requests/minute |[m
+[32m+[m[32m| `GET /api/records/:recordId` | Direct client IP + stable authenticated session ID | 10 requests/minute |[m
+[32m+[m
+[32m+[m[32mEach counted request receives `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset` headers. A blocked request gets HTTP `429 Too Many Requests` and `Retry-After`. Login attempts are counted before password hashing so a burst is throttled before more expensive credential verification. The server does not trust `X-Forwarded-For`; it binds to `127.0.0.1` and uses the direct connection address. In production behind a trusted proxy, configure trusted proxy hops explicitly instead of trusting arbitrary forwarded headers.[m
+[32m+[m
+[32m+[m[32mYou can see the 60-second behavior with cURL. If the rate-limit window is fresh, run six quick login attempts; the first five should be `200` and the sixth should be `429`. Any previous login attempts from the same IP also count toward the five-request limit:[m
+ [m
+ ```bash[m
+[31m-curl --noproxy '*' --max-time 5 -i http://127.0.0.1:3000/api/records/104[m
+[32m+[m[32mfor attempt in 1 2 3 4 5 6; do[m
+[32m+[m[32m  curl --noproxy '*' --max-time 5 -sS -o /dev/null \[m
+[32m+[m[32m    -w "attempt $attempt: HTTP %{http_code}\n" \[m
+[32m+[m[32m    -H 'Content-Type: application/json' \[m
+[32m+[m[32m    -d '{"email":"student.a@example.test","password":"northstar-demo-2026"}' \[m
+[32m+[m[32m    http://127.0.0.1:3000/api/session[m
+[32m+[m[32mdone[m
+ ```[m
+ [m
+[31m-Student A reads their own record (`200`):[m
+[32m+[m[32mEvery request to the login endpoint counts, including successful sign-ins. After this demonstration, wait a full 60 seconds before signing in again from the same machine; otherwise the cookie-capture example below will also be rate-limited.[m
+[32m+[m
+[32m+[m[32mTo see the protected-record limit, sign in once and capture the cookie from the response headers without printing it. This cURL command uses `awk` to keep only the cookie pair in a shell variable:[m
+ [m
+ ```bash[m
+[31m-curl --noproxy '*' --max-time 5 -i \[m
+[31m-  -H "Authorization: Bearer $TOKEN" \[m
+[31m-  http://127.0.0.1:3000/api/records/104[m
+[32m+[m[32mCOOKIE=$(curl --noproxy '*' --max-time 10 -sS -D - -o /dev/null \[m
+[32m+[m[32m  -H 'Content-Type: application/json' \[m
+[32m+[m[32m  -d '{"email":"student.a@example.test","password":"northstar-demo-2026"}' \[m
+[32m+[m[32m  http://127.0.0.1:3000/api/session \[m
+[32m+[m[32m  | awk 'BEGIN{IGNORECASE=1} /^Set-Cookie:/ {sub(/^[^:]*:[[:space:]]*/, ""); sub(/;.*/, ""); print; exit}')[m
+ ```[m
+ [m
+[31m-Student A requests Student B's record (generic `404`):[m
+[32m+[m[32mThe following loop should show ten `200` responses followed by `429` if the session has not already used its quota in the current window. It sends the cookie only to the loopback lab. cURL is explicitly constructing the local `Cookie` header; it is not bypassing or changing the browser's `Secure` cookie handling for any non-local service.[m
+ [m
+ ```bash[m
+[31m-curl --noproxy '*' --max-time 5 -i \[m
+[31m-  -H "Authorization: Bearer $TOKEN" \[m
+[31m-  http://127.0.0.1:3000/api/records/105[m
+[32m+[m[32mfor attempt in $(seq 1 11); do[m
+[32m+[m[32m  curl --noproxy '*' --max-time 5 -sS -o /dev/null \[m
+[32m+[m[32m    -w "record request $attempt: HTTP %{http_code}\n" \[m
+[32m+[m[32m    -H "Cookie: $COOKIE" \[m
+[32m+[m[32m    http://127.0.0.1:3000/api/records/104[m
+[32m+[m[32mdone[m
+[32m+[m[32munset COOKIE[m
+ ```[m
+ [m
+[31m-Clear the local shell variable when finished:[m
+[32m+[m[32mCounters reset as timestamps age out of the 60-second sliding window or when the local process restarts. Each limiter retains at most 5,000 key buckets and prunes expired buckets periodically. Do not repeatedly run the loop if you want to continue using the portal immediately; wait a minute for the window to expire.[m
+[32m+[m
+[32m+[m[32m## Optional cookie-authenticated cURL check[m
+[32m+[m
+[32m+[m[32mThis short example demonstrates the `200` own-record / `404` cross-account result without putting a JWT in JSON or an Authorization header:[m
+ [m
+ ```bash[m
+[31m-unset TOKEN[m
+[32m+[m[32mCOOKIE=$(curl --noproxy '*' --max-time 10 -sS -D - -o /dev/null \[m
+[32m+[m[32m  -H 'Content-Type: application/json' \[m
+[32m+[m[32m  -d '{"email":"student.a@example.test","password":"northstar-demo-2026"}' \[m
+[32m+[m[32m  http://127.0.0.1:3000/api/session \[m
+[32m+[m[32m  | awk 'BEGIN{IGNORECASE=1} /^Set-Cookie:/ {sub(/^[^:]*:[[:space:]]*/, ""); sub(/;.*/, ""); print; exit}')[m
+[32m+[m
+[32m+[m[32mcurl --noproxy '*' --max-time 5 -i -H "Cookie: $COOKIE" \[m
+[32m+[m[32m  http://127.0.0.1:3000/api/records/104[m
+[32m+[m[32mcurl --noproxy '*' --max-time 5 -i -H "Cookie: $COOKIE" \[m
+[32m+[m[32m  http://127.0.0.1:3000/api/records/105[m
+[32m+[m[32munset COOKIE[m
+ ```[m
+ [m
+[31m-Do not paste bearer tokens into reports or screenshots. If one is accidentally shared, restart the app after signing key rotation in `.env`.[m
+[32m+[m[32mThe first record request should be `200`; the second should be the generic `404`. Do not paste cookies or tokens into reports or screenshots. A cookie is a credential even when it is hidden from JavaScript.[m
+ [m
+ ## What changed and why[m
+ [m
+[31m-The isolated `examples/vulnerable-before.ts` shows the flaw: query by a caller-supplied application ID alone. The fixed `GET /api/records/:recordId` first validates a signed HS256 JWT, then uses a parameterized SQLite query with both the requested ID and the authenticated JWT subject:[m
+[32m+[m[32mTask 2's isolated `examples/vulnerable-before.ts` shows a blind ID-only lookup. The protected route validates the signed session, then uses a parameterized query constrained by both the requested application ID and authenticated owner:[m
+ [m
+ ```sql[m
+ WHERE a.id = ? AND a.owner_id = ?[m
+ ```[m
+ [m
+[31m-Missing, malformed, invalid, tampered, or expired tokens return `401 Unauthorized`. If the ID does not belong to the authenticated user—or does not exist—the API returns the same generic `404 {"error":"Record not found"}`. Successful responses omit the internal owner ID and password hashes. SQL errors and unexpected exceptions are handled by a generic `500` response without a stack trace.[m
+[31m-[m
+[31m-`PATCH.diff` is a review artifact illustrating the vulnerable-to-fixed change; it is not a standalone patch to apply verbatim. The vulnerable example is not mounted by the running server.[m
+[32m+[m[32mTask 3 removes the earlier bearer-token response and browser Web Storage use. Express reads the JWT only from the named cookie, validates HS256 signature, issuer, audience, subject, session ID, JTI, and expiry, then checks the session registry's current token ID. Login and protected-record routes use the sliding-window limiter. Errors stay generic; SQL errors and stack traces are not sent to the client. `PATCH.diff` documents the Task 2 BOLA remediation; the Task 3 cookie/session/rate-limit code is in `src/` and covered by the integration tests.[m
+ [m
+[31m-## Test coverage[m
+[31m-[m
+[31m-The integration suite uses a fresh in-memory SQLite database and verifies demo login, salted password storage, JWT claims/expiry/signature validation, `401` cases, successful reads for all five owners, Student A's denial of Students B–E, generic not-found behavior, owner-field spoofing, and SQL-shaped object IDs.[m
+[32m+[m[32m## Test and reset[m
+ [m
+ ```bash[m
+ corepack pnpm test[m
+ corepack pnpm typecheck[m
+ ```[m
+ [m
+[31m-To reset the persistent synthetic database, stop the server first, then run `rm -f data/bolaguard.sqlite*`; the next start recreates and reseeds it. This deletes only local training fixtures.[m
+[32m+[m[32mThe 28-test suite uses isolated in-memory SQLite databases. It covers secure cookie attributes, absent/tampered/expired session cookies, rotation and replay denial, the eight-hour absolute lifetime cap, logout revocation, browser code without Web Storage, five users' own records, generic cross-user `404`, login and protected-record `429`, limit headers, and sliding-window expiry.[m
+[32m+[m
+[32m+[m[32mTo reset only the persistent synthetic database, stop the server and run `rm -f data/bolaguard.sqlite*`; the next start recreates and reseeds it.[m
+[32m+[m
+[32m+[m[32m## Evidence and limitations[m
+ [m
+[31m-## Internship evidence[m
+[32m+[m[32mFor evidence, capture Student A's own record, then the generic not-found page at `?appId=105` in the same session; capture the browser's Application/Cookies panel showing the session cookie's HttpOnly, Secure, and SameSite attributes (do not expose its value); capture the tests; and capture the cURL rate-limit loop's status codes and safe headers. Never include a cookie or signing key in a screenshot or report.[m
+ [m
+[31m-Capture the Student A dashboard at `?appId=104`, then the generic not-found page at `?appId=105` in the same signed-in browser session. Also capture the passing test command. State clearly that the accounts, database, and data are synthetic and that no production system was tested.[m
+[32m+[m[32mThis is a single-process, loopback-only educational implementation with synthetic data. Its in-memory session registry and rate limiter reset on restart and do not coordinate across servers. It is not production-ready and does not represent a finding in any real service.[m
+[1mdiff --git a/TODO.md b/TODO.md[m
+[1mindex 9b6e3a6..e38e963 100644[m
+[1m--- a/TODO.md[m
+[1m+++ b/TODO.md[m
+[36m@@ -36,9 +36,48 @@[m [mLocal-only security lab: all identities and application data are fictional. The[m
+ ## Outcome: Present a realistic single-account portal[m
+ [m
+ - [x] Provide a normal demo sign-in page; after sign-in show only that account's own profile/application, with no all-users list or on-page ID lookup field.[m
+[31m-- [x] Use `?appId=<numeric-id>` as the only UI object selector; the current authenticated JWT remains unchanged when a user edits that URL.[m
+[32m+[m[32m- [x] Use `?appId=<numeric-id>` as the only UI object selector; the current authenticated session remains unchanged when a user edits that URL.[m
+ - [x] Display a plain generic not-found page for cross-user and unknown app IDs; never render the unauthorized record.[m
+ - [x] Keep the browser, API and SQLite file local/loopback-only, with no real personal data.[m
+ [m
+[31m-## Current State[m
+[31m-Implemented: local SQLite, salted demo passwords, signed JWTs, owner-filtered SQL, single-account portal, and updated remediation diff. Validation: 20 integration tests pass; TypeScript and browser-script checks pass; live own-ID access is 200 and cross-account access is generic 404.[m
+[32m+[m[32m## Task 2 State[m
+[32m+[m[32mTask 2's SQLite ownership query and vulnerable-to-fixed remediation diff are retained. The combined Task 2/3 test suite still verifies five users' own-record access and cross-account denial.[m
+[32m+[m
+[32m+[m
+[32m+[m[32m# Task 3 TODO — Cryptographic Session Security[m
+[32m+[m
+[32m+[m[32mAll Task 3 accounts, records, passwords, and secrets remain synthetic and local. The shipped app binds to loopback and uses Corepack/pnpm for setup.[m
+[32m+[m
+[32m+[m[32m## Outcome: Replace browser-readable authentication storage with a secure cookie session[m
+[32m+[m
+[32m+[m[32m- [x] Analyze the risks of storing sensitive user authentication and profile data in browser `localStorage` or `sessionStorage`, including how Cross-Site Scripting (XSS) can read and steal JavaScript-accessible tokens.[m
+[32m+[m[32m- [x] Implement a secure authentication pipeline using cryptographically signed, HTTP-only, Secure, SameSite cookies.[m
+[32m+[m[32m- [x] Create a login endpoint that verifies credentials and issues an HMAC-SHA256-signed JWT.[m
+[32m+[m[32m- [x] Set the JWT in an `HttpOnly`, `Secure`, `SameSite=Lax` cookie; do not return the JWT in a JSON response or store authentication tokens or profile data in browser Web Storage.[m
+[32m+[m[32m- [x] Implement Express middleware that verifies the JWT signature and expiry on protected routes; reject missing, malformed, invalid, expired, and superseded sessions with a generic `401` response.[m
+[32m+[m[32m- [x] Preserve Task 2's owner check: the authenticated session identity must still be cross-referenced against the database record, and another user's record must not be returned.[m
+[32m+[m
+[32m+[m[32m## Outcome: Configure session rotation and expiration[m
+[32m+[m
+[32m+[m[32m- [x] Configure an explicit short access-token lifetime and a documented absolute session lifetime.[m
+[32m+[m[32m- [x] Implement token rotation that issues a new signed token, invalidates the prior token against replay, and refreshes the cookie expiry without exceeding the absolute session lifetime.[m
+[32m+[m[32m- [x] Implement sign-out that revokes the active demo session and clears the cookie with matching cookie attributes.[m
+[32m+[m[32m- [x] Keep any rotation/revocation state local and in-memory for this single-process lab; document that it is not a production or multi-instance session store.[m
+[32m+[m
+[32m+[m[32m## Outcome: Throttle login attempts and automated record-ID guessing[m
+[32m+[m
+[32m+[m[32m- [x] Implement a sliding-window rate limiter using an in-memory store (Redis is not required for this local lab) to throttle suspicious bursts by IP and authenticated session.[m
+[32m+[m[32m- [x] Add rate-limit response headers `X-RateLimit-Limit` and `X-RateLimit-Remaining` (also include a reset value); rejected bursts return HTTP `429` with a useful `Retry-After` header.[m
+[32m+[m[32m- [x] Apply rate limiting before expensive credential verification and to protected record requests so automated ID guessing is throttled; do not trust spoofable forwarded-IP headers on the loopback server.[m
+[32m+[m[32m- [x] Document the selected window, limits, keying, in-memory reset behavior, and Redis as the scale-out alternative.[m
+[32m+[m
+[32m+[m[32m## Outcome: Demonstrate and verify the secure session behavior[m
+[32m+[m
+[32m+[m[32m- [x] Remove all token and profile writes/reads to `localStorage` and `sessionStorage`; the browser obtains its account from the cookie-authenticated session endpoint after reload.[m
+[32m+[m[32m- [x] Add integration tests for cookie flags, no token in JSON/Web Storage, valid and invalid cookie authentication, signature/expiry checks, rotation and replay rejection, logout, rate-limit headers, and HTTP `429` behavior.[m
+[32m+[m[32m- [x] Retain passing Task 2 tests proving each user can access their own record while Student A cannot read another user's record.[m
+[32m+[m[32m- [x] Update the beginner README with the XSS/Web Storage risk explanation, secure-cookie behavior, rotation and expiration flow, rate-limiter demo commands/headers, test commands, and loopback-only caveats.[m
+[32m+[m[32m- [x] Provide a functional local authentication module with HTTP-only cookies, token signing, and a working rate-limiter demo.[m
+[32m+[m
+[32m+[m[32m## Task 3 State[m
+[32m+[m[32mImplemented in the existing local lab. Verification: 28 integration tests pass; TypeScript, browser-script syntax and whitespace checks pass; live cURL checks returned login/session `200`, own-record `200`, cross-account `404`, old-token replay `401`, rotated-session `200`, and logout `204`. Browser sign-in and reload worked; changing only `appId=104` to `appId=105` showed the generic not-found screen; JavaScript could not read the `HttpOnly` cookie; and an exhausted record quota displayed the friendly rate-limit page after the API returned `429`. The learner-facing environment remains configured for loopback and `SameSite=Lax`; `0.0.0.0`/`SameSite=None` are used only as explicit isolated Preview overrides.[m
+[1mdiff --git a/package.json b/package.json[m
+[1mindex 2ce0b4f..57d6255 100644[m
+[1m--- a/package.json[m
+[1m+++ b/package.json[m
+[36m@@ -13,12 +13,14 @@[m
+   },[m
+   "dependencies": {[m
+     "better-sqlite3": "^13.0.3",[m
+[32m+[m[32m    "cookie-parser": "^1.4.7",[m
+     "dotenv": "^18.0.9",[m
+     "express": "^5.1.0",[m
+     "jsonwebtoken": "^9.0.3"[m
+   },[m
+   "devDependencies": {[m
+     "@types/better-sqlite3": "^9.6.0",[m
+[32m+[m[32m    "@types/cookie-parser": "^1.4.10",[m
+     "@types/express": "^5.0.3",[m
+     "@types/jsonwebtoken": "^9.0.10",[m
+     "@types/node": "^22.16.5",[m
+[1mdiff --git a/plan.md b/plan.md[m
+[1mindex 781799c..0a14521 100644[m
+[1m--- a/plan.md[m
+[1m+++ b/plan.md[m
+[36m@@ -44,3 +44,29 @@[m [mThree distinct directions considered: **Quiet Civic Service** (0.04), a calm, pr[m
+ ## Material constraints[m
+ [m
+ Use only fictional data, a local SQLite file, and demo-only credentials. No external account systems, network exposure, deployment, or GitHub integration. Keep local commands beginner-friendly and use Corepack with the checked-in pnpm version. Generate the JWT signing secret locally in ignored `.env`; never commit it. The README must list five demo emails, their shared lab-only password, numeric app IDs, and exact address-bar steps. Clearly state that the demo accounts and authentication are for training, not production.[m
+[32m+[m
+[32m+[m
+[32m+[m[32m# Task 3 — Cryptographic Session Security Plan[m
+[32m+[m
+[32m+[m[32m## Scope and security behavior[m
+[32m+[m
+[32m+[m[32mContinue the existing loopback-only TypeScript/Express demo and preserve Task 2’s SQLite-backed BOLA authorization. Replace browser-readable bearer-token storage with an HMAC-SHA256-signed JWT carried only in an `HttpOnly`, `Secure`, `SameSite=Lax` session cookie for the local lab. The browser must not write authentication tokens or profile data to `localStorage` or `sessionStorage`; it will request the current account from a cookie-authenticated endpoint after each page load. Explain that HttpOnly prevents JavaScript from reading the token but does not make XSS harmless: injected same-origin script could still issue authenticated actions.[m
+[32m+[m
+[32m+[m[32mThe session API will verify demo credentials, set a 15-minute JWT cookie, return only non-secret status/account data, support cookie-based session inspection, explicit token rotation and sign-out, and reject missing, invalid, expired, replayed, or superseded session IDs without exposing cryptographic details. The session registry is process-local and exists to enforce single-use rotation and logout in this training demo; it is not durable or horizontally distributed. Tokens are HS256, validated with an explicit algorithm allowlist, issuer, audience, subject, session ID, JTI and expiry. Rotation issues a new JTI, invalidates the previous JTI, and retains an eight-hour absolute session cap.[m
+[32m+[m
+[32m+[m[32mAdd an in-memory sliding-window limiter with independent per-IP login throttling and per-IP-plus-session throttling for protected record requests. The login limit is five attempts per minute; protected-record requests are limited to ten per minute per IP/session key. Return `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset`; blocked requests return `429` and `Retry-After`. Do not trust caller-supplied `X-Forwarded-For` while bound directly to loopback. The in-memory limiter is intentionally single-process and resets on restart; document Redis as the scale-out option rather than adding an external service to this Kali lab.[m
+[32m+[m
+[32m+[m[32m## Implementation map[m
+[32m+[m
+[32m+[m[32m- `src/auth.ts`: issue/verify short-lived HS256 tokens containing `sub`, `email`, `sid`, and unique `jti`; expose TTL and absolute maximum lifetime constants.[m
+[32m+[m[32m- `src/sessionStore.ts`: keep active session families/JTIs in process memory, atomically rotate JTIs, enforce the absolute lifetime, and revoke on logout.[m
+[32m+[m[32m- `src/rateLimit.ts`: implement a bounded in-memory sliding-window counter and Express middleware/header behavior.[m
+[32m+[m[32m- `src/middleware/requireSession.ts`: read the named JWT only from the cookie, verify all claims and active session state, and fail closed with a generic 401.[m
+[32m+[m[32m- `src/routes/session.ts`: login, current-session inspection, one-time rotation, and logout; set/clear the HttpOnly Secure SameSite cookie with a fixed path and expiry.[m
+[32m+[m[32m- `src/routes/records.ts`: retain the parameterized `(record ID, verified owner ID)` query and add the per-IP/session limiter.[m
+[32m+[m[32m- `src/app.ts`: wire cookie parsing, session registry, login throttling, cookie-only protected routes, and no-store headers.[m
+[32m+[m[32m- `public/app.js`: remove all Web Storage token/profile reads and writes and Authorization headers; rely on same-origin cookies, `/api/session`, `/api/session/rotate`, and logout; refresh the in-memory view from the server after reload.[m
+[32m+[m[32m- `tests/records.test.ts`: prove cookie flags, absence of Web Storage token persistence, no token in JSON, valid and invalid cookies, token rotation/replay denial, expiry, logout, header values, and sliding-window 429 behavior, while retaining BOLA access tests.[m
+[32m+[m[32m- `README.md`: document Web Storage/XSS risks and limits, cookie attributes, rotation/expiry, rate limits/headers, local cURL/browser demonstrations, and loopback-only limitations.[m
+[32m+[m
+[32m+[m[32mReuse the existing Northstar portal design. Do not add decorative assets or change the visual identity for this security-focused update. Preserve `127.0.0.1` as the shipped host default and the local SQLite fixture set. A separately explicit `BOLAGUARD_HOST=0.0.0.0` override is permitted only for the isolated Cloud Preview listener; do not put it in the learner's local template or use it on Kali. The explicit cookie SameSite setting defaults to `lax` for the requested local exercise; public HTTPS embedded Preview needs `SameSite=None; Secure`, so expose a deliberate `BOLAGUARD_COOKIE_SAME_SITE` configuration rather than inferring it from internal request scheme or `NODE_ENV`. Keep local setup defaulted to `lax`.[m
+[1mdiff --git a/pnpm-lock.yaml b/pnpm-lock.yaml[m
+[1mindex ded3a3c..9be3f06 100644[m
+[1m--- a/pnpm-lock.yaml[m
+[1m+++ b/pnpm-lock.yaml[m
+[36m@@ -11,6 +11,9 @@[m [mimporters:[m
+       better-sqlite3:[m
+         specifier: ^13.0.3[m
+         version: 13.0.3[m
+[32m+[m[32m      cookie-parser:[m
+[32m+[m[32m        specifier: ^1.4.7[m
+[32m+[m[32m        version: 1.4.7[m
+       dotenv:[m
+         specifier: ^18.0.9[m
+         version: 18.0.9[m
+[36m@@ -24,6 +27,9 @@[m [mimporters:[m
+       '@types/better-sqlite3':[m
+         specifier: ^9.6.0[m
+         version: 9.6.0[m
+[32m+[m[32m      '@types/cookie-parser':[m
+[32m+[m[32m        specifier: ^1.4.10[m
+[32m+[m[32m        version: 1.4.10(@types/express@5.0.6)[m
+       '@types/express':[m
+         specifier: ^5.0.3[m
+         version: 5.0.6[m
+[36m@@ -374,6 +380,11 @@[m [mpackages:[m
+   '@types/connect@3.4.38':[m
+     resolution: {integrity: sha512-K6uROf1LD88uDQqJCktA4yzL1YYAK6NgfsI0v/mTgyPKWsX1CnJ0XPSDhViejru1GcRkLWb8RlzFYJRqGUbaug==}[m
+ [m
+[32m+[m[32m  '@types/cookie-parser@1.4.10':[m
+[32m+[m[32m    resolution: {integrity: sha512-B4xqkqfZ8Wek+rCOeRxsjMS9OgvzebEzzLYw7NHYuvzb7IdxOkI0ZHGgeEBX4PUM7QGVvNSK60T3OvWj3YfBRg==}[m
+[32m+[m[32m    peerDependencies:[m
+[32m+[m[32m      '@types/express': '*'[m
+[32m+[m
+   '@types/cookiejar@2.1.5':[m
+     resolution: {integrity: sha512-he+DHOWReW0nghN24E1WUqM0efK4kI9oTqDm6XmK8ZPe2djZ90BSNdGnIyCLzCPw7/pogPlGbzI2wHGGmi4O/Q==}[m
+ [m
+[36m@@ -518,6 +529,13 @@[m [mpackages:[m
+     resolution: {integrity: sha512-mj7UPXE0jaqaOsukNZRUEfEi2AcL7C/vwmwcHV0O97eO1E1pxBZuyjlZrx5seTaNBg1U6+o35wpa35Qfcc+7ag==}[m
+     engines: {node: '>=18'}[m
+ [m
+[32m+[m[32m  cookie-parser@1.4.7:[m
+[32m+[m[32m    resolution: {integrity: sha512-nGUvgXnotP3BsjiLX2ypbQnWoGUPIIfHQNZkkC668ntrzGWEZVW70HDEB1qnNGMicPje6EttlIgzo51YSwNQGw==}[m
+[32m+[m[32m    engines: {node: '>= 0.8.0'}[m
+[32m+[m
+[32m+[m[32m  cookie-signature@1.0.6:[m
+[32m+[m[32m    resolution: {integrity: sha512-QADzlaHc8icV8I7vbaJXJwod9HWYp8uCqf1xa4OfNu1T7JVxQIrUgOWtHdNDtPiywmFbiS12VjotIXLrKM3orQ==}[m
+[32m+[m
+   cookie-signature@1.2.2:[m
+     resolution: {integrity: sha512-D76uU73ulSXrD1UXF4KE2TMxVVwhsnCgfAyTg9k8P6KGZjlXKrOLe4dJQKI3Bxi5wjesZoFXJWElNWBjPZMbhg==}[m
+     engines: {node: '>=6.6.0'}[m
+[36m@@ -1232,6 +1250,10 @@[m [msnapshots:[m
+     dependencies:[m
+       '@types/node': 22.20.5[m
+ [m
+[32m+[m[32m  '@types/cookie-parser@1.4.10(@types/express@5.0.6)':[m
+[32m+[m[32m    dependencies:[m
+[32m+[m[32m      '@types/express': 5.0.6[m
+[32m+[m
+   '@types/cookiejar@2.1.5': {}[m
+ [m
+   '@types/deep-eql@4.0.2': {}[m
+[36m@@ -1400,6 +1422,13 @@[m [msnapshots:[m
+ [m
+   content-type@2.1.0: {}[m
+ [m
+[32m+[m[32m  cookie-parser@1.4.7:[m
+[32m+[m[32m    dependencies:[m
+[32m+[m[32m      cookie: 0.7.2[m
+[32m+[m[32m      cookie-signature: 1.0.6[m
+[32m+[m
+[32m+[m[32m  cookie-signature@1.0.6: {}[m
+[32m+[m
+   cookie-signature@1.2.2: {}[m
+ [m
+   cookie@0.7.2: {}[m
+[1mdiff --git a/public/app.js b/public/app.js[m
+[1mindex aca4e20..a3e1348 100644[m
+[1m--- a/public/app.js[m
+[1m+++ b/public/app.js[m
+[36m@@ -1,7 +1,3 @@[m
+[31m-const TOKEN_KEY = "northstar.portal.accessToken";[m
+[31m-const ACCOUNT_KEY = "northstar.portal.account";[m
+[31m-const DEFAULT_APPLICATION_ID = "104";[m
+[31m-[m
+ const signinScreen = document.querySelector("#signin-screen");[m
+ const signinForm = document.querySelector("#signin-form");[m
+ const signinEmail = document.querySelector("#signin-email");[m
+[36m@@ -12,22 +8,27 @@[m [mconst navigation = document.querySelector("#portal-navigation");[m
+ const dashboardScreen = document.querySelector("#dashboard-screen");[m
+ const notFoundScreen = document.querySelector("#not-found-screen");[m
+ const serviceErrorScreen = document.querySelector("#service-error-screen");[m
+[32m+[m[32mconst rateLimitScreen = document.querySelector("#rate-limit-screen");[m
+ const returnLink = document.querySelector("#return-to-application");[m
+ const retryLink = document.querySelector("#retry-application");[m
+[32m+[m[32mconst rateLimitReturn = document.querySelector("#rate-limit-return");[m
+[32m+[m[32mlet currentAccount = null;[m
+[32m+[m[32mlet rotationTimer = null;[m
+ [m
+[31m-function readAccount() {[m
+[31m-  try {[m
+[31m-    const account = JSON.parse(sessionStorage.getItem(ACCOUNT_KEY) ?? "null");[m
+[31m-    if ([m
+[31m-      account &&[m
+[31m-      typeof account.name === "string" &&[m
+[31m-      typeof account.email === "string" &&[m
+[31m-      Number.isSafeInteger(account.applicationId)[m
+[31m-    ) return account;[m
+[31m-  } catch {[m
+[31m-    // Malformed browser storage is treated as a signed-out state.[m
+[32m+[m[32mfunction clearRotationTimer() {[m
+[32m+[m[32m  if (rotationTimer !== null) window.clearTimeout(rotationTimer);[m
+[32m+[m[32m  rotationTimer = null;[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mfunction clearVisibleProfile() {[m
+[32m+[m[32m  for (const id of [[m
+[32m+[m[32m    "header-account-name", "welcome-name", "account-name", "profile-name", "profile-email",[m
+[32m+[m[32m    "profile-program", "application-id", "application-status", "application-program",[m
+[32m+[m[32m    "application-term", "application-note", "rate-limit-status",[m
+[32m+[m[32m  ]) {[m
+[32m+[m[32m    const element = document.getElementById(id);[m
+[32m+[m[32m    if (element) element.textContent = "";[m
+   }[m
+[31m-  return null;[m
+ }[m
+ [m
+ function setAccountNavigation(account) {[m
+[36m@@ -36,14 +37,19 @@[m [mfunction setAccountNavigation(account) {[m
+   document.querySelector("#my-application-link").href = `/?appId=${encodeURIComponent(account.applicationId)}`;[m
+   returnLink.href = `/?appId=${encodeURIComponent(account.applicationId)}`;[m
+   retryLink.href = `/?appId=${encodeURIComponent(account.applicationId)}`;[m
+[32m+[m[32m  rateLimitReturn.href = `/?appId=${encodeURIComponent(account.applicationId)}`;[m
+   navigation.hidden = false;[m
+ }[m
+ [m
+ function showSignin(message = "") {[m
+[32m+[m[32m  clearRotationTimer();[m
+[32m+[m[32m  currentAccount = null;[m
+[32m+[m[32m  clearVisibleProfile();[m
+   signinScreen.hidden = false;[m
+   dashboardScreen.hidden = true;[m
+   notFoundScreen.hidden = true;[m
+   serviceErrorScreen.hidden = true;[m
+[32m+[m[32m  rateLimitScreen.hidden = true;[m
+   navigation.hidden = true;[m
+   document.title = "Sign in | Northstar Student Portal";[m
+   signinError.textContent = message;[m
+[36m@@ -55,6 +61,7 @@[m [mfunction showDashboard() {[m
+   dashboardScreen.hidden = false;[m
+   notFoundScreen.hidden = true;[m
+   serviceErrorScreen.hidden = true;[m
+[32m+[m[32m  rateLimitScreen.hidden = true;[m
+   document.title = "My Dashboard | Northstar Student Portal";[m
+ }[m
+ [m
+[36m@@ -63,6 +70,7 @@[m [mfunction showNotFound() {[m
+   dashboardScreen.hidden = true;[m
+   notFoundScreen.hidden = false;[m
+   serviceErrorScreen.hidden = true;[m
+[32m+[m[32m  rateLimitScreen.hidden = true;[m
+   document.title = "Application not found | Northstar Student Portal";[m
+ }[m
+ [m
+[36m@@ -71,9 +79,20 @@[m [mfunction showServiceError() {[m
+   dashboardScreen.hidden = true;[m
+   notFoundScreen.hidden = true;[m
+   serviceErrorScreen.hidden = false;[m
+[32m+[m[32m  rateLimitScreen.hidden = true;[m
+   document.title = "Service unavailable | Northstar Student Portal";[m
+ }[m
+ [m
+[32m+[m[32mfunction showRateLimited(retryAfter = "60") {[m
+[32m+[m[32m  signinScreen.hidden = true;[m
+[32m+[m[32m  dashboardScreen.hidden = true;[m
+[32m+[m[32m  notFoundScreen.hidden = true;[m
+[32m+[m[32m  serviceErrorScreen.hidden = true;[m
+[32m+[m[32m  rateLimitScreen.hidden = false;[m
+[32m+[m[32m  document.querySelector("#rate-limit-retry").textContent = retryAfter;[m
+[32m+[m[32m  document.title = "Please wait | Northstar Student Portal";[m
+[32m+[m[32m}[m
+[32m+[m
+ function showRecord(record) {[m
+   document.querySelector("#welcome-name").textContent = record.studentName;[m
+   document.querySelector("#account-name").textContent = record.studentName;[m
+[36m@@ -88,11 +107,20 @@[m [mfunction showRecord(record) {[m
+   document.querySelector("#application-note").textContent = record.note;[m
+ }[m
+ [m
+[31m-async function loadApplicationFromAddress(token, account) {[m
+[32m+[m[32mfunction showRateLimitHeaders(response) {[m
+[32m+[m[32m  const limit = response.headers.get("X-RateLimit-Limit");[m
+[32m+[m[32m  const remaining = response.headers.get("X-RateLimit-Remaining");[m
+[32m+[m[32m  const reset = response.headers.get("X-RateLimit-Reset");[m
+[32m+[m[32m  if (limit && remaining && reset) {[m
+[32m+[m[32m    document.querySelector("#rate-limit-status").textContent =[m
+[32m+[m[32m      `${remaining} of ${limit} protected requests remain in this window.`;[m
+[32m+[m[32m  }[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32masync function loadApplicationFromAddress(account) {[m
+   setAccountNavigation(account);[m
+   const address = new URL(window.location.href);[m
+   let appId = address.searchParams.get("appId");[m
+[31m-[m
+   if (!appId) {[m
+     appId = String(account.applicationId);[m
+     address.searchParams.set("appId", appId);[m
+[36m@@ -100,17 +128,16 @@[m [masync function loadApplicationFromAddress(token, account) {[m
+   }[m
+ [m
+   showDashboard();[m
+[31m-[m
+   try {[m
+     const response = await fetch(`/api/records/${encodeURIComponent(appId)}`, {[m
+       method: "GET",[m
+[31m-      headers: { Accept: "application/json", Authorization: `Bearer ${token}` },[m
+[32m+[m[32m      headers: { Accept: "application/json" },[m
+[32m+[m[32m      credentials: "same-origin",[m
+       cache: "no-store",[m
+     });[m
+[32m+[m[32m    showRateLimitHeaders(response);[m
+ [m
+     if (response.status === 401) {[m
+[31m-      sessionStorage.removeItem(TOKEN_KEY);[m
+[31m-      sessionStorage.removeItem(ACCOUNT_KEY);[m
+       showSignin("Your session has expired. Please sign in again.");[m
+       return;[m
+     }[m
+[36m@@ -118,6 +145,10 @@[m [masync function loadApplicationFromAddress(token, account) {[m
+       showNotFound();[m
+       return;[m
+     }[m
+[32m+[m[32m    if (response.status === 429) {[m
+[32m+[m[32m      showRateLimited(response.headers.get("Retry-After") ?? "60");[m
+[32m+[m[32m      return;[m
+[32m+[m[32m    }[m
+     if (!response.ok) {[m
+       showServiceError();[m
+       return;[m
+[36m@@ -129,6 +160,60 @@[m [masync function loadApplicationFromAddress(token, account) {[m
+   }[m
+ }[m
+ [m
+[32m+[m[32mfunction scheduleRotation(expiresIn) {[m
+[32m+[m[32m  clearRotationTimer();[m
+[32m+[m[32m  const rotateAfterMs = Math.max(1000, (expiresIn - 300) * 1000);[m
+[32m+[m[32m  rotationTimer = window.setTimeout(async () => {[m
+[32m+[m[32m    try {[m
+[32m+[m[32m      const response = await fetch("/api/session/rotate", {[m
+[32m+[m[32m        method: "POST",[m
+[32m+[m[32m        headers: { Accept: "application/json" },[m
+[32m+[m[32m        credentials: "same-origin",[m
+[32m+[m[32m        cache: "no-store",[m
+[32m+[m[32m      });[m
+[32m+[m[32m      if (response.status === 401) {[m
+[32m+[m[32m        showSignin("Your session has expired. Please sign in again.");[m
+[32m+[m[32m        return;[m
+[32m+[m[32m      }[m
+[32m+[m[32m      if (!response.ok) {[m
+[32m+[m[32m        rotationTimer = window.setTimeout(() => scheduleRotation(60), 30_000);[m
+[32m+[m[32m        return;[m
+[32m+[m[32m      }[m
+[32m+[m[32m      const session = await response.json();[m
+[32m+[m[32m      currentAccount = session.account;[m
+[32m+[m[32m      setAccountNavigation(currentAccount);[m
+[32m+[m[32m      scheduleRotation(session.expiresIn);[m
+[32m+[m[32m    } catch {[m
+[32m+[m[32m      rotationTimer = window.setTimeout(() => scheduleRotation(60), 30_000);[m
+[32m+[m[32m    }[m
+[32m+[m[32m  }, rotateAfterMs);[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32masync function restoreSession() {[m
+[32m+[m[32m  try {[m
+[32m+[m[32m    const response = await fetch("/api/session", {[m
+[32m+[m[32m      method: "GET",[m
+[32m+[m[32m      headers: { Accept: "application/json" },[m
+[32m+[m[32m      credentials: "same-origin",[m
+[32m+[m[32m      cache: "no-store",[m
+[32m+[m[32m    });[m
+[32m+[m[32m    if (response.status === 401) {[m
+[32m+[m[32m      showSignin();[m
+[32m+[m[32m      return;[m
+[32m+[m[32m    }[m
+[32m+[m[32m    if (!response.ok) {[m
+[32m+[m[32m      showServiceError();[m
+[32m+[m[32m      return;[m
+[32m+[m[32m    }[m
+[32m+[m[32m    const session = await response.json();[m
+[32m+[m[32m    currentAccount = session.account;[m
+[32m+[m[32m    scheduleRotation(session.expiresIn);[m
+[32m+[m[32m    await loadApplicationFromAddress(currentAccount);[m
+[32m+[m[32m  } catch {[m
+[32m+[m[32m    showServiceError();[m
+[32m+[m[32m  }[m
+[32m+[m[32m}[m
+[32m+[m
+ signinForm.addEventListener("submit", async (event) => {[m
+   event.preventDefault();[m
+   signinError.hidden = true;[m
+[36m@@ -140,9 +225,14 @@[m [msigninForm.addEventListener("submit", async (event) => {[m
+       method: "POST",[m
+       headers: { "Content-Type": "application/json", Accept: "application/json" },[m
+       body: JSON.stringify({ email: signinEmail.value.trim(), password: signinPassword.value }),[m
+[32m+[m[32m      credentials: "same-origin",[m
+       cache: "no-store",[m
+     });[m
+[31m-[m
+[32m+[m[32m    if (response.status === 429) {[m
+[32m+[m[32m      signinPassword.value = "";[m
+[32m+[m[32m      showSignin(`Too many sign-in attempts. Wait ${response.headers.get("Retry-After") ?? "60"} seconds and try again.`);[m
+[32m+[m[32m      return;[m
+[32m+[m[32m    }[m
+     if (!response.ok) {[m
+       signinPassword.value = "";[m
+       showSignin("We couldn't sign you in with those details. Check them and try again.");[m
+[36m@@ -150,13 +240,10 @@[m [msigninForm.addEventListener("submit", async (event) => {[m
+     }[m
+ [m
+     const session = await response.json();[m
+[31m-    if (typeof session.accessToken !== "string" || !session.account) {[m
+[32m+[m[32m    if (!session.account || !Number.isSafeInteger(session.account.applicationId)) {[m
+       showSignin("We couldn't start your session. Please try again.");[m
+       return;[m
+     }[m
+[31m-[m
+[31m-    sessionStorage.setItem(TOKEN_KEY, session.accessToken);[m
+[31m-    sessionStorage.setItem(ACCOUNT_KEY, JSON.stringify(session.account));[m
+     window.location.replace(`/?appId=${encodeURIComponent(session.account.applicationId)}`);[m
+   } catch {[m
+     showSignin("The portal is temporarily unavailable. Please try again.");[m
+[36m@@ -166,18 +253,19 @@[m [msigninForm.addEventListener("submit", async (event) => {[m
+   }[m
+ });[m
+ [m
+[31m-document.querySelector("#signout-button").addEventListener("click", () => {[m
+[31m-  sessionStorage.removeItem(TOKEN_KEY);[m
+[31m-  sessionStorage.removeItem(ACCOUNT_KEY);[m
+[31m-  window.location.replace("/");[m
+[32m+[m[32mdocument.querySelector("#signout-button").addEventListener("click", async () => {[m
+[32m+[m[32m  clearRotationTimer();[m
+[32m+[m[32m  try {[m
+[32m+[m[32m    await fetch("/api/session", {[m
+[32m+[m[32m      method: "DELETE",[m
+[32m+[m[32m      headers: { Accept: "application/json" },[m
+[32m+[m[32m      credentials: "same-origin",[m
+[32m+[m[32m      cache: "no-store",[m
+[32m+[m[32m    });[m
+[32m+[m[32m    showSignin("You have signed out.");[m
+[32m+[m[32m  } catch {[m
+[32m+[m[32m    showServiceError();[m
+[32m+[m[32m  }[m
+ });[m
+ [m
+[31m-const accessToken = sessionStorage.getItem(TOKEN_KEY);[m
+[31m-const account = readAccount();[m
+[31m-if (accessToken && account) {[m
+[31m-  void loadApplicationFromAddress(accessToken, account);[m
+[31m-} else {[m
+[31m-  sessionStorage.removeItem(TOKEN_KEY);[m
+[31m-  sessionStorage.removeItem(ACCOUNT_KEY);[m
+[31m-  showSignin();[m
+[31m-}[m
+[32m+[m[32mvoid restoreSession();[m
+[1mdiff --git a/public/index.html b/public/index.html[m
+[1mindex 4699857..1e7d0a3 100644[m
+[1m--- a/public/index.html[m
+[1m+++ b/public/index.html[m
+[36m@@ -54,6 +54,7 @@[m
+       <section id="dashboard-screen" class="dashboard-screen" aria-labelledby="dashboard-heading" hidden>[m
+         <div class="dashboard-topline">[m
+           <div class="breadcrumbs"><span>HOME</span><b>/</b><span>MY DASHBOARD</span></div>[m
+[32m+[m[32m          <p id="rate-limit-status" class="rate-limit-status" aria-live="polite"></p>[m
+         </div>[m
+ [m
+         <section class="dashboard-welcome">[m
+[36m@@ -103,6 +104,16 @@[m
+           <a id="retry-application" class="primary-button return-button" href="/?appId=104">Try again <span aria-hidden="true">→</span></a>[m
+         </article>[m
+       </section>[m
+[32m+[m
+[32m+[m[32m      <section id="rate-limit-screen" class="not-found-screen" aria-labelledby="rate-limit-heading" hidden>[m
+[32m+[m[32m        <article class="not-found-card">[m
+[32m+[m[32m          <span class="not-found-symbol" aria-hidden="true">…</span>[m
+[32m+[m[32m          <p class="card-kicker">REQUEST LIMIT</p>[m
+[32m+[m[32m          <h1 id="rate-limit-heading">Please wait before trying again</h1>[m
+[32m+[m[32m          <p>This account has made several requests in a short period. Try again in about <strong id="rate-limit-retry">60</strong> seconds.</p>[m
+[32m+[m[32m          <a id="rate-limit-return" class="primary-button return-button" href="/?appId=104">Return to my account <span aria-hidden="true">→</span></a>[m
+[32m+[m[32m        </article>[m
+[32m+[m[32m      </section>[m
+     </main>[m
+ [m
+     <footer class="site-footer"><span>Northstar Student Services</span><span>Local training environment · Fictional information</span></footer>[m
+[1mdiff --git a/public/styles.css b/public/styles.css[m
+[1mindex b2f7af6..42303e9 100644[m
+[1m--- a/public/styles.css[m
+[1m+++ b/public/styles.css[m
+[36m@@ -189,3 +189,4 @@[m [mdd { margin: 0; color: #344358; font-size: 10px; font-weight: 650; overflow-wrap[m
+ [m
+ #signin-email { margin-bottom: 14px; }[m
+ #signin-password { margin-top: 0; }[m
+[32m+[m[32m.rate-limit-status { margin: 0; color: var(--muted); font-size: 9px; text-align: right; }[m
+[1mdiff --git a/src/app.ts b/src/app.ts[m
+[1mindex ce464bd..2a878ef 100644[m
+[1m--- a/src/app.ts[m
+[1m+++ b/src/app.ts[m
+[36m@@ -1,15 +1,29 @@[m
+[32m+[m[32mimport cookieParser from "cookie-parser";[m
+ import express from "express";[m
+ import { fileURLToPath } from "node:url";[m
+ import { openDatabase, type AppDatabase } from "./database.js";[m
+[32m+[m[32mimport { readCookieSameSite, type CookieSameSite } from "./cookies.js";[m
+ import { createRecordsRouter } from "./routes/records.js";[m
+ import { createSessionRouter } from "./routes/session.js";[m
+[32m+[m[32mimport { createSlidingWindowLimiter } from "./rateLimit.js";[m
+[32m+[m[32mimport { SessionStore } from "./sessionStore.js";[m
+ [m
+ const publicDirectory = fileURLToPath(new URL("../public/", import.meta.url));[m
+ [m
+[32m+[m[32mexport interface RateLimitSettings {[m
+[32m+[m[32m  limit: number;[m
+[32m+[m[32m  windowMs: number;[m
+[32m+[m[32m}[m
+[32m+[m
+ export interface CreateAppOptions {[m
+   jwtSecret?: string;[m
+   databasePath?: string;[m
+   database?: AppDatabase;[m
+[32m+[m[32m  cookieSameSite?: CookieSameSite;[m
+[32m+[m[32m  rateLimits?: {[m
+[32m+[m[32m    login?: RateLimitSettings;[m
+[32m+[m[32m    records?: RateLimitSettings;[m
+[32m+[m[32m  };[m
+ }[m
+ [m
+ export function createApp(options: CreateAppOptions = {}) {[m
+[36m@@ -21,11 +35,30 @@[m [mexport function createApp(options: CreateAppOptions = {}) {[m
+   const database = options.database ?? openDatabase([m
+     options.databasePath ?? process.env.DATABASE_PATH ?? "data/bolaguard.sqlite",[m
+   );[m
+[32m+[m[32m  const sameSite = options.cookieSameSite ?? readCookieSameSite(process.env.BOLAGUARD_COOKIE_SAME_SITE);[m
+[32m+[m[32m  const sessions = new SessionStore(jwtSecret);[m
+[32m+[m[32m  const loginSettings = options.rateLimits?.login ?? { limit: 5, windowMs: 60_000 };[m
+[32m+[m[32m  const recordsSettings = options.rateLimits?.records ?? { limit: 10, windowMs: 60_000 };[m
+[32m+[m[32m  const loginLimiter = createSlidingWindowLimiter({[m
+[32m+[m[32m    ...loginSettings,[m
+[32m+[m[32m    key: (req) => req.ip || req.socket.remoteAddress || "unknown-ip",[m
+[32m+[m[32m  });[m
+[32m+[m[32m  const recordLimiter = createSlidingWindowLimiter({[m
+[32m+[m[32m    ...recordsSettings,[m
+[32m+[m[32m    key: (req) => {[m
+[32m+[m[32m      const identity = req.authenticatedUser;[m
+[32m+[m[32m      return `${req.ip || req.socket.remoteAddress || "unknown-ip"}:${identity?.sessionId ?? "no-session"}`;[m
+[32m+[m[32m    },[m
+[32m+[m[32m  });[m
+[32m+[m
+   const app = express();[m
+   app.disable("x-powered-by");[m
+[32m+[m[32m  app.set("trust proxy", false);[m
+   app.locals.database = database;[m
+[32m+[m[32m  app.locals.sessions = sessions;[m
+ [m
+   app.use(express.json({ limit: "4kb" }));[m
+[32m+[m[32m  app.use(cookieParser());[m
+   app.use("/api", (_req, res, next) => {[m
+     res.setHeader("Cache-Control", "no-store");[m
+     next();[m
+[36m@@ -35,8 +68,8 @@[m [mexport function createApp(options: CreateAppOptions = {}) {[m
+     res.status(200).json({ status: "ok", mode: "local-training-lab" });[m
+   });[m
+ [m
+[31m-  app.use("/api/session", createSessionRouter(database, jwtSecret));[m
+[31m-  app.use("/api/records", createRecordsRouter(database, jwtSecret));[m
+[32m+[m[32m  app.use("/api/session", createSessionRouter(database, jwtSecret, sessions, loginLimiter, sameSite));[m
+[32m+[m[32m  app.use("/api/records", createRecordsRouter(database, jwtSecret, sessions, recordLimiter, sameSite));[m
+ [m
+   app.use([m
+     express.static(publicDirectory, {[m
+[1mdiff --git a/src/auth.ts b/src/auth.ts[m
+[1mindex 6b06796..34f38e6 100644[m
+[1m--- a/src/auth.ts[m
+[1m+++ b/src/auth.ts[m
+[36m@@ -1,11 +1,13 @@[m
+[31m-import { scryptSync, timingSafeEqual } from "node:crypto";[m
+[31m-import jwt, { type JwtPayload } from "jsonwebtoken";[m
+[32m+[m[32mimport { randomUUID, scryptSync, timingSafeEqual } from "node:crypto";[m
+[32m+[m[32mimport jwt from "jsonwebtoken";[m
+ import type { AppDatabase } from "./database.js";[m
+ import { DEMO_PASSWORD } from "./records.js";[m
+ [m
+ export const JWT_ISSUER = "bola-guard-local-lab";[m
+ export const JWT_AUDIENCE = "northstar-student-portal";[m
+[31m-export const JWT_TTL_SECONDS = 30 * 60;[m
+[32m+[m[32mexport const JWT_TTL_SECONDS = 15 * 60;[m
+[32m+[m[32mexport const SESSION_ABSOLUTE_TTL_SECONDS = 8 * 60 * 60;[m
+[32m+[m[32mexport const SESSION_COOKIE_NAME = "northstar_session";[m
+ [m
+ export interface DemoAccount {[m
+   userId: string;[m
+[36m@@ -14,6 +16,24 @@[m [mexport interface DemoAccount {[m
+   applicationId: number;[m
+ }[m
+ [m
+[32m+[m[32mexport interface VerifiedSession {[m
+[32m+[m[32m  userId: string;[m
+[32m+[m[32m  email: string;[m
+[32m+[m[32m  sessionId: string;[m
+[32m+[m[32m  jti: string;[m
+[32m+[m[32m  issuedAt: number;[m
+[32m+[m[32m  expiresAt: number;[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mexport interface IssuedAccessToken {[m
+[32m+[m[32m  token: string;[m
+[32m+[m[32m  sessionId: string;[m
+[32m+[m[32m  jti: string;[m
+[32m+[m[32m  issuedAt: number;[m
+[32m+[m[32m  expiresAt: number;[m
+[32m+[m[32m  expiresIn: number;[m
+[32m+[m[32m}[m
+[32m+[m
+ interface DemoUserRow {[m
+   id: string;[m
+   email: string;[m
+[36m@@ -65,21 +85,33 @@[m [mexport function authenticateDemoUser([m
+   };[m
+ }[m
+ [m
+[31m-export function issueAccessToken(account: DemoAccount, jwtSecret: string): string {[m
+[31m-  return jwt.sign([m
+[31m-    { email: account.email },[m
+[32m+[m[32mexport function issueAccessToken([m
+[32m+[m[32m  account: DemoAccount,[m
+[32m+[m[32m  jwtSecret: string,[m
+[32m+[m[32m  sessionId: string,[m
+[32m+[m[32m  expiresIn: number,[m
+[32m+[m[32m  issuedAt = Math.floor(Date.now() / 1000),[m
+[32m+[m[32m): IssuedAccessToken {[m
+[32m+[m[32m  const jti = randomUUID();[m
+[32m+[m[32m  const expiresAt = issuedAt + expiresIn;[m
+[32m+[m[32m  const token = jwt.sign([m
+[32m+[m[32m    { email: account.email, sid: sessionId, iat: issuedAt },[m
+     jwtSecret,[m
+     {[m
+       algorithm: "HS256",[m
+       audience: JWT_AUDIENCE,[m
+[31m-      expiresIn: JWT_TTL_SECONDS,[m
+[32m+[m[32m      expiresIn,[m
+       issuer: JWT_ISSUER,[m
+[32m+[m[32m      jwtid: jti,[m
+       subject: account.userId,[m
+     },[m
+   );[m
+[32m+[m
+[32m+[m[32m  return { token, sessionId, jti, issuedAt, expiresAt, expiresIn };[m
+ }[m
+ [m
+[31m-export function verifyAccessToken(token: string, jwtSecret: string): { userId: string; email: string } {[m
+[32m+[m[32mexport function verifyAccessToken(token: string, jwtSecret: string): VerifiedSession {[m
+[32m+[m[32m  if (token.length > 8192) throw new Error("Invalid session token");[m
+   const payload = jwt.verify(token, jwtSecret, {[m
+     algorithms: ["HS256"],[m
+     audience: JWT_AUDIENCE,[m
+[36m@@ -91,12 +123,22 @@[m [mexport function verifyAccessToken(token: string, jwtSecret: string): { userId: s[m
+     typeof payload.sub !== "string" ||[m
+     payload.sub.length === 0 ||[m
+     typeof payload.email !== "string" ||[m
+[32m+[m[32m    typeof payload.sid !== "string" ||[m
+[32m+[m[32m    payload.sid.length === 0 ||[m
+[32m+[m[32m    typeof payload.jti !== "string" ||[m
+[32m+[m[32m    payload.jti.length === 0 ||[m
+[32m+[m[32m    typeof payload.iat !== "number" ||[m
+     typeof payload.exp !== "number"[m
+   ) {[m
+     throw new Error("Invalid session claims");[m
+   }[m
+ [m
+[31m-  return { userId: payload.sub, email: payload.email };[m
+[32m+[m[32m  return {[m
+[32m+[m[32m    userId: payload.sub,[m
+[32m+[m[32m    email: payload.email,[m
+[32m+[m[32m    sessionId: payload.sid,[m
+[32m+[m[32m    jti: payload.jti,[m
+[32m+[m[32m    issuedAt: payload.iat,[m
+[32m+[m[32m    expiresAt: payload.exp,[m
+[32m+[m[32m  };[m
+ }[m
+[31m-[m
+[31m-export type VerifiedJwtPayload = JwtPayload;[m
+[1mdiff --git a/src/middleware/requireSession.ts b/src/middleware/requireSession.ts[m
+[1mindex 0cabd9a..427780f 100644[m
+[1m--- a/src/middleware/requireSession.ts[m
+[1m+++ b/src/middleware/requireSession.ts[m
+[36m@@ -1,23 +1,29 @@[m
+ import type { RequestHandler } from "express";[m
+[31m-import { verifyAccessToken } from "../auth.js";[m
+[32m+[m[32mimport { SESSION_COOKIE_NAME, verifyAccessToken } from "../auth.js";[m
+[32m+[m[32mimport { sessionClearCookieOptions, type CookieSameSite } from "../cookies.js";[m
+[32m+[m[32mimport type { SessionStore } from "../sessionStore.js";[m
+ [m
+[31m-export function createRequireSession(jwtSecret: string): RequestHandler {[m
+[32m+[m[32mexport function createRequireSession([m
+[32m+[m[32m  jwtSecret: string,[m
+[32m+[m[32m  sessions: SessionStore,[m
+[32m+[m[32m  sameSite: CookieSameSite,[m
+[32m+[m[32m): RequestHandler {[m
+   return (req, res, next) => {[m
+[31m-    const authorization = req.get("authorization");[m
+[31m-    const token = authorization?.match(/^Bearer\s+([^\s]+)$/i)?.[1];[m
+[31m-[m
+[31m-    if (!token) {[m
+[32m+[m[32m    const token = req.cookies?.[SESSION_COOKIE_NAME];[m
+[32m+[m[32m    if (typeof token !== "string" || token.length === 0) {[m
+       res.status(401).json({ error: "Unauthorized" });[m
+       return;[m
+     }[m
+ [m
+     try {[m
+[31m-      // Identity comes from a verified signature and JWT subject, never from[m
+[31m-      // the requested application ID or a caller-supplied owner field.[m
+[31m-      req.authenticatedUser = verifyAccessToken(token, jwtSecret);[m
+[32m+[m[32m      const claims = verifyAccessToken(token, jwtSecret);[m
+[32m+[m[32m      if (!sessions.isActive(claims)) throw new Error("Inactive session");[m
+[32m+[m[32m      // Identity is from the verified JWT and current server-side session family;[m
+[32m+[m[32m      // no caller-provided owner, body field, or query parameter is trusted.[m
+[32m+[m[32m      req.authenticatedUser = claims;[m
+       next();[m
+     } catch {[m
+[31m-      // Keep token-validation details and cryptographic errors out of responses.[m
+[32m+[m[32m      res.clearCookie(SESSION_COOKIE_NAME, sessionClearCookieOptions(sameSite));[m
+       res.status(401).json({ error: "Unauthorized" });[m
+     }[m
+   };[m
+[1mdiff --git a/src/routes/records.ts b/src/routes/records.ts[m
+[1mindex 82f3943..74a56e4 100644[m
+[1m--- a/src/routes/records.ts[m
+[1m+++ b/src/routes/records.ts[m
+[36m@@ -1,6 +1,8 @@[m
+[31m-import { Router } from "express";[m
+[32m+[m[32mimport { Router, type RequestHandler } from "express";[m
+ import type { AppDatabase } from "../database.js";[m
+[32m+[m[32mimport { type CookieSameSite } from "../cookies.js";[m
+ import { createRequireSession } from "../middleware/requireSession.js";[m
+[32m+[m[32mimport type { SessionStore } from "../sessionStore.js";[m
+ [m
+ interface PublicApplication {[m
+   id: number;[m
+[36m@@ -12,10 +14,17 @@[m [minterface PublicApplication {[m
+   note: string;[m
+ }[m
+ [m
+[31m-export function createRecordsRouter(database: AppDatabase, jwtSecret: string) {[m
+[32m+[m[32mexport function createRecordsRouter([m
+[32m+[m[32m  database: AppDatabase,[m
+[32m+[m[32m  jwtSecret: string,[m
+[32m+[m[32m  sessions: SessionStore,[m
+[32m+[m[32m  recordLimiter: RequestHandler,[m
+[32m+[m[32m  sameSite: CookieSameSite,[m
+[32m+[m[32m) {[m
+   const router = Router();[m
+[32m+[m[32m  const requireSession = createRequireSession(jwtSecret, sessions, sameSite);[m
+ [m
+[31m-  router.get("/:recordId", createRequireSession(jwtSecret), (req, res) => {[m
+[32m+[m[32m  router.get("/:recordId", requireSession, recordLimiter, (req, res) => {[m
+     const authenticatedUserId = req.authenticatedUser?.userId;[m
+     if (!authenticatedUserId) {[m
+       res.status(401).json({ error: "Unauthorized" });[m
+[36m@@ -53,8 +62,6 @@[m [mexport function createRecordsRouter(database: AppDatabase, jwtSecret: string) {[m
+       .get(applicationId, authenticatedUserId) as PublicApplication | undefined;[m
+ [m
+     if (!application) {[m
+[31m-      // Same response for absent and non-owned IDs avoids confirming another[m
+[31m-      // user's record exists.[m
+       res.status(404).json({ error: "Record not found" });[m
+       return;[m
+     }[m
+[1mdiff --git a/src/routes/session.ts b/src/routes/session.ts[m
+[1mindex 7acb3c1..458011b 100644[m
+[1m--- a/src/routes/session.ts[m
+[1m+++ b/src/routes/session.ts[m
+[36m@@ -1,14 +1,23 @@[m
+[31m-import { Router } from "express";[m
+[32m+[m[32mimport { Router, type RequestHandler } from "express";[m
+[32m+[m[32mimport { authenticateDemoUser, SESSION_COOKIE_NAME, verifyAccessToken } from "../auth.js";[m
+ import type { AppDatabase } from "../database.js";[m
+[31m-import { authenticateDemoUser, issueAccessToken, JWT_TTL_SECONDS } from "../auth.js";[m
+[32m+[m[32mimport { sessionClearCookieOptions, sessionCookieOptions, type CookieSameSite } from "../cookies.js";[m
+[32m+[m[32mimport { createRequireSession } from "../middleware/requireSession.js";[m
+[32m+[m[32mimport type { SessionStore } from "../sessionStore.js";[m
+ [m
+[31m-export function createSessionRouter(database: AppDatabase, jwtSecret: string) {[m
+[32m+[m[32mexport function createSessionRouter([m
+[32m+[m[32m  database: AppDatabase,[m
+[32m+[m[32m  jwtSecret: string,[m
+[32m+[m[32m  sessions: SessionStore,[m
+[32m+[m[32m  loginLimiter: RequestHandler,[m
+[32m+[m[32m  sameSite: CookieSameSite,[m
+[32m+[m[32m) {[m
+   const router = Router();[m
+[32m+[m[32m  const requireSession = createRequireSession(jwtSecret, sessions, sameSite);[m
+ [m
+[31m-  router.post("/", (req, res) => {[m
+[32m+[m[32m  router.post("/", loginLimiter, (req, res) => {[m
+     const email = typeof req.body?.email === "string" ? req.body.email : "";[m
+     const password = typeof req.body?.password === "string" ? req.body.password : "";[m
+[31m-[m
+     if (!email || !password) {[m
+       res.status(401).json({ error: "Invalid email or password" });[m
+       return;[m
+[36m@@ -20,11 +29,34 @@[m [mexport function createSessionRouter(database: AppDatabase, jwtSecret: string) {[m
+       return;[m
+     }[m
+ [m
+[31m-    const accessToken = issueAccessToken(account, jwtSecret);[m
+[32m+[m[32m    const issued = sessions.create(account);[m
+[32m+[m[32m    res.cookie([m
+[32m+[m[32m      SESSION_COOKIE_NAME,[m
+[32m+[m[32m      issued.token,[m
+[32m+[m[32m      sessionCookieOptions(sameSite, issued.expiresIn),[m
+[32m+[m[32m    );[m
+[32m+[m[32m    res.status(200).json({[m
+[32m+[m[32m      tokenType: "Cookie",[m
+[32m+[m[32m      expiresIn: issued.expiresIn,[m
+[32m+[m[32m      account: {[m
+[32m+[m[32m        name: account.name,[m
+[32m+[m[32m        email: account.email,[m
+[32m+[m[32m        applicationId: account.applicationId,[m
+[32m+[m[32m      },[m
+[32m+[m[32m    });[m
+[32m+[m[32m  });[m
+[32m+[m
+[32m+[m[32m  router.get("/", requireSession, (req, res) => {[m
+[32m+[m[32m    const claims = req.authenticatedUser;[m
+[32m+[m[32m    const account = claims ? sessions.accountFor(claims) : null;[m
+[32m+[m[32m    if (!claims || !account) {[m
+[32m+[m[32m      res.status(401).json({ error: "Unauthorized" });[m
+[32m+[m[32m      return;[m
+[32m+[m[32m    }[m
+[32m+[m
+     res.status(200).json({[m
+[31m-      tokenType: "Bearer",[m
+[31m-      accessToken,[m
+[31m-      expiresIn: JWT_TTL_SECONDS,[m
+[32m+[m[32m      authenticated: true,[m
+[32m+[m[32m      expiresIn: Math.max(0, claims.expiresAt - Math.floor(Date.now() / 1000)),[m
+       account: {[m
+         name: account.name,[m
+         email: account.email,[m
+[36m@@ -33,5 +65,43 @@[m [mexport function createSessionRouter(database: AppDatabase, jwtSecret: string) {[m
+     });[m
+   });[m
+ [m
+[32m+[m[32m  router.post("/rotate", requireSession, (req, res) => {[m
+[32m+[m[32m    const claims = req.authenticatedUser;[m
+[32m+[m[32m    const rotated = claims ? sessions.rotate(claims) : null;[m
+[32m+[m[32m    if (!rotated) {[m
+[32m+[m[32m      res.clearCookie(SESSION_COOKIE_NAME, sessionClearCookieOptions(sameSite));[m
+[32m+[m[32m      res.status(401).json({ error: "Unauthorized" });[m
+[32m+[m[32m      return;[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    res.cookie([m
+[32m+[m[32m      SESSION_COOKIE_NAME,[m
+[32m+[m[32m      rotated.token,[m
+[32m+[m[32m      sessionCookieOptions(sameSite, rotated.expiresIn),[m
+[32m+[m[32m    );[m
+[32m+[m[32m    res.status(200).json({[m
+[32m+[m[32m      expiresIn: rotated.expiresIn,[m
+[32m+[m[32m      account: {[m
+[32m+[m[32m        name: rotated.account.name,[m
+[32m+[m[32m        email: rotated.account.email,[m
+[32m+[m[32m        applicationId: rotated.account.applicationId,[m
+[32m+[m[32m      },[m
+[32m+[m[32m    });[m
+[32m+[m[32m  });[m
+[32m+[m
+[32m+[m[32m  router.delete("/", (req, res) => {[m
+[32m+[m[32m    const token = req.cookies?.[SESSION_COOKIE_NAME];[m
+[32m+[m[32m    if (typeof token === "string") {[m
+[32m+[m[32m      try {[m
+[32m+[m[32m        sessions.revoke(verifyAccessToken(token, jwtSecret));[m
+[32m+[m[32m      } catch {[m
+[32m+[m[32m        // Sign-out still clears malformed, expired, and already-revoked cookies.[m
+[32m+[m[32m      }[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    res.clearCookie(SESSION_COOKIE_NAME, sessionClearCookieOptions(sameSite));[m
+[32m+[m[32m    res.status(204).end();[m
+[32m+[m[32m  });[m
+[32m+[m
+   return router;[m
+ }[m
+[1mdiff --git a/src/server.ts b/src/server.ts[m
+[1mindex 8fddeb1..50b97b6 100644[m
+[1m--- a/src/server.ts[m
+[1m+++ b/src/server.ts[m
+[36m@@ -2,11 +2,15 @@[m [mimport "dotenv/config";[m
+ import { createApp } from "./app.js";[m
+ import type { AppDatabase } from "./database.js";[m
+ [m
+[31m-// Intentionally fixed to loopback: do not expose this training API to a network.[m
+[31m-const host = "127.0.0.1";[m
+[32m+[m[32m// The distributable lab defaults to loopback. Cloud Preview can explicitly[m
+[32m+[m[32m// override this to 0.0.0.0 in its isolated sandbox; never set that for Kali.[m
+[32m+[m[32mconst host = process.env.BOLAGUARD_HOST ?? "127.0.0.1";[m
+ const port = Number(process.env.PORT ?? 3000);[m
+ const jwtSecret = process.env.BOLAGUARD_JWT_SECRET;[m
+ [m
+[32m+[m[32mif (host !== "127.0.0.1" && host !== "0.0.0.0") {[m
+[32m+[m[32m  throw new Error("BOLAGUARD_HOST must be 127.0.0.1 or the isolated Preview value 0.0.0.0");[m
+[32m+[m[32m}[m
+ if (!Number.isInteger(port) || port < 1024 || port > 65535) {[m
+   throw new Error("PORT must be an integer from 1024 through 65535");[m
+ }[m
+[36m@@ -20,7 +24,8 @@[m [mconst app = createApp({[m
+ });[m
+ const database = app.locals.database as AppDatabase;[m
+ const server = app.listen(port, host, () => {[m
+[31m-  console.log(`BOLA Guard Lab listening locally at http://${host}:${port}`);[m
+[32m+[m[32m  const localAddress = host === "0.0.0.0" ? "127.0.0.1" : host;[m
+[32m+[m[32m  console.log(`BOLA Guard Lab listening locally at http://${localAddress}:${port}`);[m
+   console.log("SQLite demo data is synthetic; do not expose this service publicly.");[m
+ });[m
+ [m
+[1mdiff --git a/src/types/express.d.ts b/src/types/express.d.ts[m
+[1mindex 642dbeb..9b876c2 100644[m
+[1m--- a/src/types/express.d.ts[m
+[1m+++ b/src/types/express.d.ts[m
+[36m@@ -1,12 +1,10 @@[m
+ import "express-serve-static-core";[m
+[32m+[m[32mimport type { VerifiedSession } from "../auth.js";[m
+ [m
+ declare global {[m
+   namespace Express {[m
+     interface Request {[m
+[31m-      authenticatedUser?: {[m
+[31m-        userId: string;[m
+[31m-        email: string;[m
+[31m-      };[m
+[32m+[m[32m      authenticatedUser?: VerifiedSession;[m
+     }[m
+   }[m
+ }[m
+[1mdiff --git a/tests/records.test.ts b/tests/records.test.ts[m
+[1mindex 2855423..ec5e829 100644[m
+[1m--- a/tests/records.test.ts[m
+[1m+++ b/tests/records.test.ts[m
+[36m@@ -3,13 +3,51 @@[m [mimport request from "supertest";[m
+ import jwt from "jsonwebtoken";[m
+ import Database from "better-sqlite3";[m
+ import { createApp } from "../src/app.js";[m
+[31m-import { JWT_AUDIENCE, JWT_ISSUER } from "../src/auth.js";[m
+[32m+[m[32mimport {[m
+[32m+[m[32m  JWT_AUDIENCE,[m
+[32m+[m[32m  JWT_ISSUER,[m
+[32m+[m[32m  JWT_TTL_SECONDS,[m
+[32m+[m[32m  SESSION_ABSOLUTE_TTL_SECONDS,[m
+[32m+[m[32m  SESSION_COOKIE_NAME,[m
+[32m+[m[32m  type VerifiedSession,[m
+[32m+[m[32m  verifyAccessToken,[m
+[32m+[m[32m} from "../src/auth.js";[m
+ import { initializeDatabase } from "../src/database.js";[m
+[32m+[m[32mimport { SlidingWindowCounter } from "../src/rateLimit.js";[m
+ import { DEMO_PASSWORD } from "../src/records.js";[m
+[32m+[m[32mimport { SessionStore } from "../src/sessionStore.js";[m
+ [m
+ const testSecret = "unit-test-jwt-secret-that-is-never-used-outside-tests";[m
+ const database = initializeDatabase(new Database(":memory:"));[m
+[31m-const app = createApp({ database, jwtSecret: testSecret });[m
+[32m+[m[32mconst rateDatabase = initializeDatabase(new Database(":memory:"));[m
+[32m+[m[32mconst loginRateDatabase = initializeDatabase(new Database(":memory:"));[m
+[32m+[m[32mconst app = createApp({[m
+[32m+[m[32m  database,[m
+[32m+[m[32m  jwtSecret: testSecret,[m
+[32m+[m[32m  cookieSameSite: "lax",[m
+[32m+[m[32m  rateLimits: {[m
+[32m+[m[32m    login: { limit: 100, windowMs: 60_000 },[m
+[32m+[m[32m    records: { limit: 100, windowMs: 60_000 },[m
+[32m+[m[32m  },[m
+[32m+[m[32m});[m
+[32m+[m[32mconst rateApp = createApp({[m
+[32m+[m[32m  database: rateDatabase,[m
+[32m+[m[32m  jwtSecret: testSecret,[m
+[32m+[m[32m  cookieSameSite: "lax",[m
+[32m+[m[32m  rateLimits: {[m
+[32m+[m[32m    login: { limit: 2, windowMs: 60_000 },[m
+[32m+[m[32m    records: { limit: 2, windowMs: 60_000 },[m
+[32m+[m[32m  },[m
+[32m+[m[32m});[m
+[32m+[m[32mconst loginRateApp = createApp({[m
+[32m+[m[32m  database: loginRateDatabase,[m
+[32m+[m[32m  jwtSecret: testSecret,[m
+[32m+[m[32m  cookieSameSite: "lax",[m
+[32m+[m[32m  rateLimits: {[m
+[32m+[m[32m    login: { limit: 2, windowMs: 60_000 },[m
+[32m+[m[32m    records: { limit: 2, windowMs: 60_000 },[m
+[32m+[m[32m  },[m
+[32m+[m[32m});[m
+ [m
+ const users = [[m
+   { name: "Student A", email: "student.a@example.test", id: 104, userId: "user-a" },[m
+[36m@@ -19,28 +57,46 @@[m [mconst users = [[m
+   { name: "Student E", email: "student.e@example.test", id: 108, userId: "user-e" },[m
+ ];[m
+ [m
+[31m-let studentAToken = "";[m
+[32m+[m[32mtype PortalApp = typeof app;[m
+[32m+[m
+[32m+[m[32mfunction setCookieHeader(response: { headers: Record<string, string | string[] | undefined> }): string {[m
+[32m+[m[32m  const setCookie = response.headers["set-cookie"];[m
+[32m+[m[32m  const cookie = Array.isArray(setCookie) ? setCookie[0] : setCookie;[m
+[32m+[m[32m  if (!cookie) throw new Error("Expected a Set-Cookie session header");[m
+[32m+[m[32m  return cookie;[m
+[32m+[m[32m}[m
+ [m
+[31m-async function login(email: string, password = DEMO_PASSWORD): Promise<string> {[m
+[31m-  const response = await request(app)[m
+[32m+[m[32mfunction sessionCookie(response: { headers: Record<string, string | string[] | undefined> }): string {[m
+[32m+[m[32m  return setCookieHeader(response).split(";", 1)[0]!;[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32masync function login([m
+[32m+[m[32m  targetApp: PortalApp,[m
+[32m+[m[32m  email: string,[m
+[32m+[m[32m  password = DEMO_PASSWORD,[m
+[32m+[m[32m): Promise<string> {[m
+[32m+[m[32m  const response = await request(targetApp)[m
+     .post("/api/session")[m
+     .send({ email, password })[m
+     .expect(200);[m
+[31m-  return response.body.accessToken as string;[m
+[32m+[m[32m  return sessionCookie(response);[m
+ }[m
+ [m
+[32m+[m[32mlet studentACookie = "";[m
+[32m+[m
+ beforeAll(async () => {[m
+[31m-  studentAToken = await login("student.a@example.test");[m
+[32m+[m[32m  studentACookie = await login(app, "student.a@example.test");[m
+ });[m
+ [m
+ afterAll(() => {[m
+   database.close();[m
+[32m+[m[32m  rateDatabase.close();[m
+[32m+[m[32m  loginRateDatabase.close();[m
+ });[m
+ [m
+[31m-describe("database-backed BOLA Guard Lab", () => {[m
+[32m+[m[32mdescribe("cookie-based cryptographic session security and BOLA protection", () => {[m
+   it("serves a normal portal shell without listing demo users or records", async () => {[m
+     const response = await request(app).get("/");[m
+[31m-[m
+     expect(response.status).toBe(200);[m
+     expect(response.headers["content-type"]).toContain("text/html");[m
+     expect(response.text).toContain("Northstar Student Portal");[m
+[36m@@ -48,61 +104,74 @@[m [mdescribe("database-backed BOLA Guard Lab", () => {[m
+     expect(response.text).toContain('id="dashboard-screen"');[m
+     expect(response.text).toContain('id="not-found-screen"');[m
+     expect(response.text).not.toContain("student.a@example.test");[m
+[31m-    expect(response.text).not.toContain("lab-session-user-");[m
+     expect(response.text).not.toContain("record-form");[m
+[31m-    expect(response.text).not.toContain("technical-response");[m
+   });[m
+ [m
+[31m-  it("serves the same shell for a URL-addressed appId without embedding record data", async () => {[m
+[31m-    const response = await request(app).get("/?appId=105");[m
+[31m-[m
+[31m-    expect(response.status).toBe(200);[m
+[31m-    expect(response.text).toContain('id="dashboard-screen"');[m
+[31m-    expect(response.text).not.toContain("student.b@example.test");[m
+[31m-    expect(response.text).not.toContain("Synthetic private note for Student B");[m
+[31m-  });[m
+[31m-[m
+[31m-  it("serves the page route manifest and local health endpoint", async () => {[m
+[32m+[m[32m  it("serves the page manifest and local health endpoint", async () => {[m
+     const manifest = await request(app).get("/manus-routes.json");[m
+     const health = await request(app).get("/health");[m
+[31m-[m
+     expect(manifest.status).toBe(200);[m
+     expect(manifest.body).toEqual({ routes: [{ path: "/", title: "Northstar Student Portal" }] });[m
+[31m-    expect(health.status).toBe(200);[m
+     expect(health.body).toEqual({ status: "ok", mode: "local-training-lab" });[m
+   });[m
+ [m
+[31m-  it("accepts a demo login and returns a signed, short-lived JWT for that user", async () => {[m
+[32m+[m[32m  it("issues an HMAC-SHA256 JWT only in an HttpOnly Secure SameSite cookie", async () => {[m
+     const response = await request(app)[m
+       .post("/api/session")[m
+[31m-      .send({ email: "student.a@example.test", password: DEMO_PASSWORD });[m
+[32m+[m[32m      .send({ email: "student.a@example.test", password: DEMO_PASSWORD })[m
+[32m+[m[32m      .expect(200);[m
+[32m+[m[32m    const setCookie = setCookieHeader(response);[m
+ [m
+[31m-    expect(response.status).toBe(200);[m
+     expect(response.headers["cache-control"]).toContain("no-store");[m
+[32m+[m[32m    expect(setCookie).toContain(`${SESSION_COOKIE_NAME}=`);[m
+[32m+[m[32m    expect(setCookie).toMatch(/HttpOnly/i);[m
+[32m+[m[32m    expect(setCookie).toMatch(/Secure/i);[m
+[32m+[m[32m    expect(setCookie).toMatch(/SameSite=Lax/i);[m
+[32m+[m[32m    expect(setCookie).toMatch(/Path=\//i);[m
+[32m+[m[32m    expect(setCookie).toMatch(/Max-Age=900/i);[m
+     expect(response.body).toMatchObject({[m
+[31m-      tokenType: "Bearer",[m
+[31m-      expiresIn: 1800,[m
+[31m-      account: {[m
+[31m-        name: "Student A",[m
+[31m-        email: "student.a@example.test",[m
+[31m-        applicationId: 104,[m
+[31m-      },[m
+[32m+[m[32m      tokenType: "Cookie",[m
+[32m+[m[32m      expiresIn: JWT_TTL_SECONDS,[m
+[32m+[m[32m      account: { name: "Student A", email: "student.a@example.test", applicationId: 104 },[m
+     });[m
+[31m-    expect(response.body.accessToken.split(".")).toHaveLength(3);[m
+[32m+[m[32m    expect(response.body).not.toHaveProperty("token");[m
+[32m+[m[32m    expect(response.body).not.toHaveProperty("accessToken");[m
+ [m
+[31m-    const claims = jwt.verify(response.body.accessToken, testSecret, {[m
+[32m+[m[32m    const rawToken = setCookie.split(";", 1)[0]!.slice(`${SESSION_COOKIE_NAME}=`.length);[m
+[32m+[m[32m    const claims = jwt.verify(rawToken, testSecret, {[m
+       algorithms: ["HS256"],[m
+       issuer: JWT_ISSUER,[m
+       audience: JWT_AUDIENCE,[m
+     });[m
+     expect(claims).toMatchObject({ sub: "user-a", email: "student.a@example.test" });[m
+[32m+[m[32m    expect((claims as jwt.JwtPayload).jti).toBeTruthy();[m
+[32m+[m[32m    expect((claims as jwt.JwtPayload).sid).toBeTruthy();[m
+   });[m
+ [m
+[31m-  it("stores only a salted password hash in the users table", () => {[m
+[32m+[m[32m  it("keeps browser authentication and profile data out of Web Storage", async () => {[m
+[32m+[m[32m    const script = await request(app).get("/app.js").expect(200);[m
+[32m+[m[32m    expect(script.text).not.toMatch(/localStorage|sessionStorage/);[m
+[32m+[m[32m    expect(script.text).not.toMatch(/Authorization\s*:/i);[m
+[32m+[m[32m    expect(script.text).toContain("/api/session/rotate");[m
+[32m+[m[32m    expect(script.text).toContain("credentials: \"same-origin\"");[m
+[32m+[m[32m  });[m
+[32m+[m
+[32m+[m[32m  it("restores the account from a valid cookie after a page refresh", async () => {[m
+[32m+[m[32m    const response = await request(app)[m
+[32m+[m[32m      .get("/api/session")[m
+[32m+[m[32m      .set("Cookie", studentACookie)[m
+[32m+[m[32m      .expect(200);[m
+[32m+[m[32m    expect(response.body).toMatchObject({[m
+[32m+[m[32m      authenticated: true,[m
+[32m+[m[32m      account: { name: "Student A", email: "student.a@example.test", applicationId: 104 },[m
+[32m+[m[32m    });[m
+[32m+[m[32m    expect(response.body).not.toHaveProperty("token");[m
+[32m+[m[32m  });[m
+[32m+[m
+[32m+[m[32m  it("stores only a salted password hash in SQLite", () => {[m
+     const row = database[m
+       .prepare("SELECT password_salt, password_hash FROM users WHERE id = ?")[m
+       .get("user-a") as { password_salt: string; password_hash: string };[m
+[31m-[m
+     expect(row.password_salt).not.toBe("");[m
+     expect(row.password_hash).not.toBe(DEMO_PASSWORD);[m
+     expect(row.password_hash).toHaveLength(128);[m
+[36m@@ -112,110 +181,230 @@[m [mdescribe("database-backed BOLA Guard Lab", () => {[m
+     const response = await request(app)[m
+       .post("/api/session")[m
+       .send({ email: "student.a@example.test", password: "wrong-password" });[m
+[31m-[m
+     expect(response.status).toBe(401);[m
+     expect(response.body).toEqual({ error: "Invalid email or password" });[m
+     expect(JSON.stringify(response.body)).not.toMatch(/sql|database|password_hash|stack/i);[m
+   });[m
+ [m
+[31m-  it("rejects missing, malformed, and unknown bearer authentication with 401", async () => {[m
+[31m-    const missing = await request(app).get("/api/records/104");[m
+[32m+[m[32m  it("rejects missing, malformed, invalid, and Bearer-only session credentials", async () => {[m
+[32m+[m[32m    const missing = await request(app).get("/api/session");[m
+[32m+[m[32m    const bearerOnly = await request(app)[m
+[32m+[m[32m      .get("/api/records/104")[m
+[32m+[m[32m      .set("Authorization", "Bearer this-is-not-accepted");[m
+     const malformed = await request(app)[m
+       .get("/api/records/104")[m
+[31m-      .set("Authorization", "Bearer ");[m
+[31m-    const unknown = await request(app)[m
+[32m+[m[32m      .set("Cookie", `${SESSION_COOKIE_NAME}=not-a-jwt`);[m
+[32m+[m[32m    const invalidSignature = await request(app)[m
+       .get("/api/records/104")[m
+[31m-      .set("Authorization", "Bearer not-a-jwt");[m
+[32m+[m[32m      .set("Cookie", `${SESSION_COOKIE_NAME}=eyJhbGciOiJub25lIn0.eyJzdWIiOiJ1c2VyLWEifQ.`);[m
+ [m
+[31m-    for (const response of [missing, malformed, unknown]) {[m
+[32m+[m[32m    for (const response of [missing, bearerOnly, malformed, invalidSignature]) {[m
+       expect(response.status).toBe(401);[m
+       expect(response.body).toEqual({ error: "Unauthorized" });[m
+[32m+[m[32m      expect(JSON.stringify(response.body)).not.toMatch(/jwt|signature|sql|stack/i);[m
+     }[m
+   });[m
+ [m
+[31m-  it("rejects a JWT whose signature was changed", async () => {[m
+[31m-    const token = await login("student.a@example.test");[m
+[31m-    const [header, payload, signature] = token.split(".");[m
+[31m-    const changedSignature = `${signature!.startsWith("A") ? "B" : "A"}${signature!.slice(1)}`;[m
+[31m-    const tampered = `${header}.${payload}.${changedSignature}`;[m
+[31m-[m
+[32m+[m[32m  it("rejects a JWT whose signed payload or signature was tampered with", async () => {[m
+[32m+[m[32m    const [cookieName, rawToken] = studentACookie.split("=");[m
+[32m+[m[32m    const [header, payload, signature] = rawToken!.split(".");[m
+[32m+[m[32m    const tampered = `${header}.${payload}.${signature!.startsWith("A") ? "B" : "A"}${signature!.slice(1)}`;[m
+     const response = await request(app)[m
+[31m-      .get("/api/records/104")[m
+[31m-      .set("Authorization", `Bearer ${tampered}`);[m
+[31m-[m
+[32m+[m[32m      .get("/api/session")[m
+[32m+[m[32m      .set("Cookie", `${cookieName}=${tampered}`);[m
+     expect(response.status).toBe(401);[m
+     expect(response.body).toEqual({ error: "Unauthorized" });[m
+   });[m
+ [m
+[31m-  it("rejects an expired JWT with 401", async () => {[m
+[32m+[m[32m  it("rejects an expired JWT with a generic 401", async () => {[m
+     const expired = jwt.sign([m
+[31m-      { email: "student.a@example.test" },[m
+[32m+[m[32m      { email: "student.a@example.test", sid: "expired-session", iat: Math.floor(Date.now() / 1000) - 60 },[m
+       testSecret,[m
+       {[m
+         algorithm: "HS256",[m
+         audience: JWT_AUDIENCE,[m
+         expiresIn: -1,[m
+         issuer: JWT_ISSUER,[m
+[32m+[m[32m        jwtid: "expired-token-id",[m
+         subject: "user-a",[m
+       },[m
+     );[m
+[31m-[m
+     const response = await request(app)[m
+[31m-      .get("/api/records/104")[m
+[31m-      .set("Authorization", `Bearer ${expired}`);[m
+[31m-[m
+[32m+[m[32m      .get("/api/session")[m
+[32m+[m[32m      .set("Cookie", `${SESSION_COOKIE_NAME}=${expired}`);[m
+     expect(response.status).toBe(401);[m
+     expect(response.body).toEqual({ error: "Unauthorized" });[m
+   });[m
+ [m
+[32m+[m[32m  it("rotates a token once, refreshes the cookie, and rejects replay of the previous token", async () => {[m
+[32m+[m[32m    const firstCookie = await login(app, "student.a@example.test");[m
+[32m+[m[32m    const rotation = await request(app)[m
+[32m+[m[32m      .post("/api/session/rotate")[m
+[32m+[m[32m      .set("Cookie", firstCookie)[m
+[32m+[m[32m      .expect(200);[m
+[32m+[m[32m    const secondCookie = sessionCookie(rotation);[m
+[32m+[m
+[32m+[m[32m    expect(secondCookie).not.toBe(firstCookie);[m
+[32m+[m[32m    expect(rotation.headers["set-cookie"][0]).toMatch(/HttpOnly/i);[m
+[32m+[m[32m    expect(rotation.headers["set-cookie"][0]).toMatch(/Secure/i);[m
+[32m+[m[32m    expect(rotation.headers["set-cookie"][0]).toMatch(/SameSite=Lax/i);[m
+[32m+[m[32m    expect(rotation.body.expiresIn).toBe(JWT_TTL_SECONDS);[m
+[32m+[m
+[32m+[m[32m    const replay = await request(app)[m
+[32m+[m[32m      .get("/api/session")[m
+[32m+[m[32m      .set("Cookie", firstCookie);[m
+[32m+[m[32m    const current = await request(app)[m
+[32m+[m[32m      .get("/api/session")[m
+[32m+[m[32m      .set("Cookie", secondCookie);[m
+[32m+[m[32m    expect(replay.status).toBe(401);[m
+[32m+[m[32m    expect(current.status).toBe(200);[m
+[32m+[m[32m    expect(SESSION_ABSOLUTE_TTL_SECONDS).toBe(8 * 60 * 60);[m
+[32m+[m[32m  });[m
+[32m+[m
+[32m+[m[32m  it("enforces the eight-hour absolute session limit across repeated rotations", () => {[m
+[32m+[m[32m    const store = new SessionStore(testSecret);[m
+[32m+[m[32m    const account = {[m
+[32m+[m[32m      userId: "user-a",[m
+[32m+[m[32m      email: "student.a@example.test",[m
+[32m+[m[32m      name: "Student A",[m
+[32m+[m[32m      applicationId: 104,[m
+[32m+[m[32m    };[m
+[32m+[m[32m    const startedAt = Math.floor(Date.now() / 1000);[m
+[32m+[m[32m    const initial = store.create(account, startedAt);[m
+[32m+[m[32m    const claimsFor = (session: typeof initial): VerifiedSession => ({[m
+[32m+[m[32m      userId: account.userId,[m
+[32m+[m[32m      email: account.email,[m
+[32m+[m[32m      sessionId: session.sessionId,[m
+[32m+[m[32m      jti: session.jti,[m
+[32m+[m[32m      issuedAt: session.issuedAt,[m
+[32m+[m[32m      expiresAt: session.expiresAt,[m
+[32m+[m[32m    });[m
+[32m+[m
+[32m+[m[32m    let current = initial;[m
+[32m+[m[32m    for (let elapsed = 10 * 60; elapsed < SESSION_ABSOLUTE_TTL_SECONDS; elapsed += 10 * 60) {[m
+[32m+[m[32m      const rotated = store.rotate(claimsFor(current), startedAt + elapsed);[m
+[32m+[m[32m      expect(rotated).not.toBeNull();[m
+[32m+[m[32m      current = rotated!;[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    expect(current.expiresAt).toBe(startedAt + SESSION_ABSOLUTE_TTL_SECONDS);[m
+[32m+[m[32m    expect(store.rotate(claimsFor(current), startedAt + SESSION_ABSOLUTE_TTL_SECONDS)).toBeNull();[m
+[32m+[m[32m  });[m
+[32m+[m
+[32m+[m[32m  it("revokes the active session and clears its cookie on logout", async () => {[m
+[32m+[m[32m    const cookie = await login(app, "student.a@example.test");[m
+[32m+[m[32m    const logout = await request(app)[m
+[32m+[m[32m      .delete("/api/session")[m
+[32m+[m[32m      .set("Cookie", cookie)[m
+[32m+[m[32m      .expect(204);[m
+[32m+[m[32m    const clearCookie = setCookieHeader(logout);[m
+[32m+[m[32m    expect(clearCookie).toMatch(/HttpOnly/i);[m
+[32m+[m[32m    expect(clearCookie).toMatch(/Secure/i);[m
+[32m+[m[32m    expect(clearCookie).toMatch(/SameSite=Lax/i);[m
+[32m+[m[32m    expect(clearCookie).toMatch(/Expires=Thu, 01 Jan 1970 00:00:00 GMT/i);[m
+[32m+[m
+[32m+[m[32m    const replay = await request(app).get("/api/session").set("Cookie", cookie);[m
+[32m+[m[32m    expect(replay.status).toBe(401);[m
+[32m+[m[32m  });[m
+[32m+[m
+   it.each(users)("allows $name to read their own SQLite-backed application", async (user) => {[m
+[31m-    const token = await login(user.email);[m
+[32m+[m[32m    const cookie = await login(app, user.email);[m
+     const response = await request(app)[m
+       .get(`/api/records/${user.id}`)[m
+[31m-      .set("Authorization", `Bearer ${token}`);[m
+[31m-[m
+[32m+[m[32m      .set("Cookie", cookie);[m
+     expect(response.status).toBe(200);[m
+[31m-    expect(response.body).toMatchObject({[m
+[31m-      id: user.id,[m
+[31m-      studentName: user.name,[m
+[31m-      email: user.email,[m
+[31m-    });[m
+[32m+[m[32m    expect(response.body).toMatchObject({ id: user.id, studentName: user.name, email: user.email });[m
+     expect(response.body).not.toHaveProperty("ownerId");[m
+     expect(response.body).not.toHaveProperty("password_hash");[m
+[31m-    expect(response.body).not.toHaveProperty("password_salt");[m
+   });[m
+ [m
+   it.each(users.slice(1))("denies Student A access to $name's application without leaking it", async (target) => {[m
+     const response = await request(app)[m
+       .get(`/api/records/${target.id}`)[m
+[31m-      .set("Authorization", `Bearer ${studentAToken}`);[m
+[31m-[m
+[32m+[m[32m      .set("Cookie", studentACookie);[m
+     expect(response.status).toBe(404);[m
+     expect(response.body).toEqual({ error: "Record not found" });[m
+     expect(JSON.stringify(response.body)).not.toContain(target.email);[m
+     expect(JSON.stringify(response.body)).not.toMatch(/sql|database|stack|ownerId/i);[m
+   });[m
+ [m
+[31m-  it("uses the same generic 404 for an unknown ID and ignores ownerId query tampering", async () => {[m
+[32m+[m[32m  it("uses the same generic 404 for unknown and non-owned IDs, ignoring ownerId tampering", async () => {[m
+     const unknown = await request(app)[m
+       .get("/api/records/999")[m
+[31m-      .set("Authorization", `Bearer ${studentAToken}`);[m
+[32m+[m[32m      .set("Cookie", studentACookie);[m
+     const attemptedOwnerOverride = await request(app)[m
+       .get("/api/records/105?ownerId=user-b")[m
+[31m-      .set("Authorization", `Bearer ${studentAToken}`);[m
+[31m-[m
+[32m+[m[32m      .set("Cookie", studentACookie);[m
+     expect(unknown.status).toBe(404);[m
+     expect(attemptedOwnerOverride.status).toBe(404);[m
+     expect(unknown.body).toEqual({ error: "Record not found" });[m
+     expect(attemptedOwnerOverride.body).toEqual(unknown.body);[m
+   });[m
+ [m
+[31m-  it("rejects nonnumeric and SQL-shaped object IDs without running arbitrary SQL", async () => {[m
+[32m+[m[32m  it("rejects nonnumeric and SQL-shaped object IDs", async () => {[m
+     const response = await request(app)[m
+       .get("/api/records/104%20OR%201%3D1")[m
+[31m-      .set("Authorization", `Bearer ${studentAToken}`);[m
+[31m-[m
+[32m+[m[32m      .set("Cookie", studentACookie);[m
+     expect(response.status).toBe(404);[m
+     expect(response.body).toEqual({ error: "Record not found" });[m
+   });[m
+[32m+[m
+[32m+[m[32m  it("sets limit, remaining, reset and retry headers and blocks a burst of protected ID requests", async () => {[m
+[32m+[m[32m    const cookie = await login(rateApp, "student.a@example.test");[m
+[32m+[m[32m    const first = await request(rateApp).get("/api/records/104").set("Cookie", cookie).expect(200);[m
+[32m+[m[32m    const second = await request(rateApp).get("/api/records/104").set("Cookie", cookie).expect(200);[m
+[32m+[m[32m    const blocked = await request(rateApp).get("/api/records/104").set("Cookie", cookie).expect(429);[m
+[32m+[m
+[32m+[m[32m    expect(first.headers["x-ratelimit-limit"]).toBe("2");[m
+[32m+[m[32m    expect(first.headers["x-ratelimit-remaining"]).toBe("1");[m
+[32m+[m[32m    expect(first.headers["x-ratelimit-reset"]).toBeTruthy();[m
+[32m+[m[32m    expect(second.headers["x-ratelimit-remaining"]).toBe("0");[m
+[32m+[m[32m    expect(blocked.headers["x-ratelimit-limit"]).toBe("2");[m
+[32m+[m[32m    expect(blocked.headers["x-ratelimit-remaining"]).toBe("0");[m
+[32m+[m[32m    expect(blocked.headers["retry-after"]).toBeTruthy();[m
+[32m+[m[32m    expect(blocked.body).toEqual({ error: "Too many requests" });[m
+[32m+[m[32m  });[m
+[32m+[m
+[32m+[m[32m  it("throttles repeated login failures by client IP before checking further credentials", async () => {[m
+[32m+[m[32m    const wrong = () => request(loginRateApp)[m
+[32m+[m[32m      .post("/api/session")[m
+[32m+[m[32m      .send({ email: "student.a@example.test", password: "incorrect" });[m
+[32m+[m[32m    const first = await wrong().expect(401);[m
+[32m+[m[32m    const second = await wrong().expect(401);[m
+[32m+[m[32m    const blocked = await request(loginRateApp)[m
+[32m+[m[32m      .post("/api/session")[m
+[32m+[m[32m      .send({ email: "student.a@example.test", password: DEMO_PASSWORD })[m
+[32m+[m[32m      .expect(429);[m
+[32m+[m
+[32m+[m[32m    expect(first.headers["x-ratelimit-limit"]).toBe("2");[m
+[32m+[m[32m    expect(first.headers["x-ratelimit-remaining"]).toBe("1");[m
+[32m+[m[32m    expect(second.headers["x-ratelimit-remaining"]).toBe("0");[m
+[32m+[m[32m    expect(blocked.headers["retry-after"]).toBeTruthy();[m
+[32m+[m[32m    expect(blocked.body).toEqual({ error: "Too many requests" });[m
+[32m+[m[32m  });[m
+[32m+[m
+[32m+[m[32m  it("uses a true sliding window and frees a request after the oldest event expires", () => {[m
+[32m+[m[32m    const counter = new SlidingWindowCounter(2, 1000);[m
+[32m+[m[32m    expect(counter.consume("client", 0)).toMatchObject({ allowed: true, remaining: 1 });[m
+[32m+[m[32m    expect(counter.consume("client", 1)).toMatchObject({ allowed: true, remaining: 0 });[m
+[32m+[m[32m    expect(counter.consume("client", 2)).toMatchObject({ allowed: false, remaining: 0 });[m
+[32m+[m[32m    expect(counter.consume("client", 1000)).toMatchObject({ allowed: true, remaining: 0 });[m
+[32m+[m[32m  });[m
+[32m+[m
+[32m+[m[32m  it("verifies signatures only with the configured HMAC-SHA256 algorithm", async () => {[m
+[32m+[m[32m    const claims = verifyAccessToken([m
+[32m+[m[32m      (studentACookie.split("=", 2)[1] ?? ""),[m
+[32m+[m[32m      testSecret,[m
+[32m+[m[32m    );[m
+[32m+[m[32m    expect(claims.userId).toBe("user-a");[m
+[32m+[m[32m    const HS384 = jwt.sign([m
+[32m+[m[32m      { email: "student.a@example.test", sid: claims.sessionId },[m
+[32m+[m[32m      testSecret,[m
+[32m+[m[32m      { algorithm: "HS384", audience: JWT_AUDIENCE, expiresIn: 900, issuer: JWT_ISSUER, subject: "user-a" },[m
+[32m+[m[32m    );[m
+[32m+[m[32m    const response = await request(app)[m
+[32m+[m[32m      .get("/api/session")[m
+[32m+[m[32m      .set("Cookie", `${SESSION_COOKIE_NAME}=${HS384}`);[m
+[32m+[m[32m    expect(response.status).toBe(401);[m
+[32m+[m[32m  });[m
+ });[m
+[1mdiff --git a/src/cookies.ts b/src/cookies.ts[m
+[1mnew file mode 100644[m
+[1mindex 0000000..e53c020[m
+[1m--- /dev/null[m
+[1m+++ b/src/cookies.ts[m
+[36m@@ -0,0 +1,32 @@[m
+[32m+[m[32mimport type { CookieOptions } from "express";[m
+[32m+[m[32mimport { SESSION_COOKIE_NAME } from "./auth.js";[m
+[32m+[m
+[32m+[m[32mexport type CookieSameSite = "lax" | "none";[m
+[32m+[m[32mexport { SESSION_COOKIE_NAME };[m
+[32m+[m
+[32m+[m[32mexport function readCookieSameSite(value: string | undefined): CookieSameSite {[m
+[32m+[m[32m  const normalized = value?.trim().toLowerCase() ?? "lax";[m
+[32m+[m[32m  if (normalized !== "lax" && normalized !== "none") {[m
+[32m+[m[32m    throw new Error("BOLAGUARD_COOKIE_SAME_SITE must be 'lax' or 'none'");[m
+[32m+[m[32m  }[m
+[32m+[m[32m  return normalized;[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mexport function sessionCookieOptions(sameSite: CookieSameSite, maxAgeSeconds: number): CookieOptions {[m
+[32m+[m[32m  return {[m
+[32m+[m[32m    httpOnly: true,[m
+[32m+[m[32m    secure: true,[m
+[32m+[m[32m    sameSite,[m
+[32m+[m[32m    path: "/",[m
+[32m+[m[32m    maxAge: Math.max(0, maxAgeSeconds) * 1000,[m
+[32m+[m[32m  };[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mexport function sessionClearCookieOptions(sameSite: CookieSameSite): CookieOptions {[m
+[32m+[m[32m  return {[m
+[32m+[m[32m    httpOnly: true,[m
+[32m+[m[32m    secure: true,[m
+[32m+[m[32m    sameSite,[m
+[32m+[m[32m    path: "/",[m
+[32m+[m[32m  };[m
+[32m+[m[32m}[m
+[1mdiff --git a/src/rateLimit.ts b/src/rateLimit.ts[m
+[1mnew file mode 100644[m
+[1mindex 0000000..2bdd118[m
+[1m--- /dev/null[m
+[1m+++ b/src/rateLimit.ts[m
+[36m@@ -0,0 +1,106 @@[m
+[32m+[m[32mimport type { Request, RequestHandler } from "express";[m
+[32m+[m
+[32m+[m[32mexport interface SlidingWindowOptions {[m
+[32m+[m[32m  limit: number;[m
+[32m+[m[32m  windowMs: number;[m
+[32m+[m[32m  key: (request: Request) => string;[m
+[32m+[m[32m  now?: () => number;[m
+[32m+[m[32m  maxBuckets?: number;[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32minterface Decision {[m
+[32m+[m[32m  allowed: boolean;[m
+[32m+[m[32m  limit: number;[m
+[32m+[m[32m  remaining: number;[m
+[32m+[m[32m  resetAtSeconds: number;[m
+[32m+[m[32m  retryAfterSeconds: number;[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mexport class SlidingWindowCounter {[m
+[32m+[m[32m  private readonly events = new Map<string, number[]>();[m
+[32m+[m[32m  private operations = 0;[m
+[32m+[m
+[32m+[m[32m  constructor([m
+[32m+[m[32m    private readonly limit: number,[m
+[32m+[m[32m    private readonly windowMs: number,[m
+[32m+[m[32m    private readonly maxBuckets = 5000,[m
+[32m+[m[32m  ) {[m
+[32m+[m[32m    if (!Number.isInteger(limit) || limit < 1 || !Number.isFinite(windowMs) || windowMs < 1) {[m
+[32m+[m[32m      throw new Error("Sliding-window limit and window must be positive");[m
+[32m+[m[32m    }[m
+[32m+[m[32m    if (!Number.isInteger(maxBuckets) || maxBuckets < 1) {[m
+[32m+[m[32m      throw new Error("Sliding-window bucket limit must be positive");[m
+[32m+[m[32m    }[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  consume(key: string, now: number): Decision {[m
+[32m+[m[32m    const cutoff = now - this.windowMs;[m
+[32m+[m[32m    const previous = this.events.get(key);[m
+[32m+[m[32m    const current = (previous ?? []).filter((timestamp) => timestamp > cutoff);[m
+[32m+[m[32m    this.operations += 1;[m
+[32m+[m
+[32m+[m[32m    if (this.operations % 128 === 0) this.pruneExpired(cutoff);[m
+[32m+[m[32m    if (current.length >= this.limit) {[m
+[32m+[m[32m      const resetAt = current[0]! + this.windowMs;[m
+[32m+[m[32m      return {[m
+[32m+[m[32m        allowed: false,[m
+[32m+[m[32m        limit: this.limit,[m
+[32m+[m[32m        remaining: 0,[m
+[32m+[m[32m        resetAtSeconds: Math.ceil(resetAt / 1000),[m
+[32m+[m[32m        retryAfterSeconds: Math.max(1, Math.ceil((resetAt - now) / 1000)),[m
+[32m+[m[32m      };[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    if (!previous && this.events.size >= this.maxBuckets) this.evictOldestBucket();[m
+[32m+[m[32m    current.push(now);[m
+[32m+[m[32m    this.events.set(key, current);[m
+[32m+[m[32m    const resetAt = current[0]! + this.windowMs;[m
+[32m+[m[32m    return {[m
+[32m+[m[32m      allowed: true,[m
+[32m+[m[32m      limit: this.limit,[m
+[32m+[m[32m      remaining: Math.max(0, this.limit - current.length),[m
+[32m+[m[32m      resetAtSeconds: Math.ceil(resetAt / 1000),[m
+[32m+[m[32m      retryAfterSeconds: Math.max(1, Math.ceil((resetAt - now) / 1000)),[m
+[32m+[m[32m    };[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  private pruneExpired(cutoff: number): void {[m
+[32m+[m[32m    for (const [key, timestamps] of this.events) {[m
+[32m+[m[32m      const live = timestamps.filter((timestamp) => timestamp > cutoff);[m
+[32m+[m[32m      if (live.length === 0) this.events.delete(key);[m
+[32m+[m[32m      else this.events.set(key, live);[m
+[32m+[m[32m    }[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  private evictOldestBucket(): void {[m
+[32m+[m[32m    let oldestKey: string | undefined;[m
+[32m+[m[32m    let oldestEvent = Number.POSITIVE_INFINITY;[m
+[32m+[m[32m    for (const [key, timestamps] of this.events) {[m
+[32m+[m[32m      const first = timestamps[0] ?? 0;[m
+[32m+[m[32m      if (first < oldestEvent) {[m
+[32m+[m[32m        oldestEvent = first;[m
+[32m+[m[32m        oldestKey = key;[m
+[32m+[m[32m      }[m
+[32m+[m[32m    }[m
+[32m+[m[32m    if (oldestKey !== undefined) this.events.delete(oldestKey);[m
+[32m+[m[32m  }[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mexport function createSlidingWindowLimiter(options: SlidingWindowOptions): RequestHandler {[m
+[32m+[m[32m  const counter = new SlidingWindowCounter(options.limit, options.windowMs, options.maxBuckets);[m
+[32m+[m[32m  const now = options.now ?? Date.now;[m
+[32m+[m
+[32m+[m[32m  return (request, response, next) => {[m
+[32m+[m[32m    const decision = counter.consume(options.key(request), now());[m
+[32m+[m[32m    response.setHeader("X-RateLimit-Limit", String(decision.limit));[m
+[32m+[m[32m    response.setHeader("X-RateLimit-Remaining", String(decision.remaining));[m
+[32m+[m[32m    response.setHeader("X-RateLimit-Reset", String(decision.resetAtSeconds));[m
+[32m+[m
+[32m+[m[32m    if (!decision.allowed) {[m
+[32m+[m[32m      response.setHeader("Retry-After", String(decision.retryAfterSeconds));[m
+[32m+[m[32m      response.status(429).json({ error: "Too many requests" });[m
+[32m+[m[32m      return;[m
+[32m+[m[32m    }[m
+[32m+[m[32m    next();[m
+[32m+[m[32m  };[m
+[32m+[m[32m}[m
+[1mdiff --git a/src/sessionStore.ts b/src/sessionStore.ts[m
+[1mnew file mode 100644[m
+[1mindex 0000000..fac4dbe[m
+[1m--- /dev/null[m
+[1m+++ b/src/sessionStore.ts[m
+[36m@@ -0,0 +1,94 @@[m
+[32m+[m[32mimport { randomUUID } from "node:crypto";[m
+[32m+[m[32mimport {[m
+[32m+[m[32m  issueAccessToken,[m
+[32m+[m[32m  JWT_TTL_SECONDS,[m
+[32m+[m[32m  SESSION_ABSOLUTE_TTL_SECONDS,[m
+[32m+[m[32m  type DemoAccount,[m
+[32m+[m[32m  type IssuedAccessToken,[m
+[32m+[m[32m  type VerifiedSession,[m
+[32m+[m[32m} from "./auth.js";[m
+[32m+[m
+[32m+[m[32minterface ActiveSession {[m
+[32m+[m[32m  account: DemoAccount;[m
+[32m+[m[32m  sessionId: string;[m
+[32m+[m[32m  currentJti: string;[m
+[32m+[m[32m  currentExpiresAt: number;[m
+[32m+[m[32m  absoluteExpiresAt: number;[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mexport interface SessionIssue extends IssuedAccessToken {[m
+[32m+[m[32m  account: DemoAccount;[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mexport class SessionStore {[m
+[32m+[m[32m  private readonly sessions = new Map<string, ActiveSession>();[m
+[32m+[m
+[32m+[m[32m  constructor(private readonly jwtSecret: string) {}[m
+[32m+[m
+[32m+[m[32m  create(account: DemoAccount, now = Math.floor(Date.now() / 1000)): SessionIssue {[m
+[32m+[m[32m    this.pruneExpired(now);[m
+[32m+[m[32m    const sessionId = randomUUID();[m
+[32m+[m[32m    const absoluteExpiresAt = now + SESSION_ABSOLUTE_TTL_SECONDS;[m
+[32m+[m[32m    const expiresIn = Math.min(JWT_TTL_SECONDS, absoluteExpiresAt - now);[m
+[32m+[m[32m    const issued = issueAccessToken(account, this.jwtSecret, sessionId, expiresIn, now);[m
+[32m+[m[32m    this.sessions.set(sessionId, {[m
+[32m+[m[32m      account,[m
+[32m+[m[32m      sessionId,[m
+[32m+[m[32m      currentJti: issued.jti,[m
+[32m+[m[32m      currentExpiresAt: issued.expiresAt,[m
+[32m+[m[32m      absoluteExpiresAt,[m
+[32m+[m[32m    });[m
+[32m+[m[32m    return { ...issued, account };[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  isActive(claims: VerifiedSession, now = Math.floor(Date.now() / 1000)): boolean {[m
+[32m+[m[32m    const active = this.sessions.get(claims.sessionId);[m
+[32m+[m[32m    return Boolean([m
+[32m+[m[32m      active &&[m
+[32m+[m[32m      active.currentJti === claims.jti &&[m
+[32m+[m[32m      active.account.userId === claims.userId &&[m
+[32m+[m[32m      active.account.email === claims.email &&[m
+[32m+[m[32m      active.currentExpiresAt === claims.expiresAt &&[m
+[32m+[m[32m      now < active.currentExpiresAt &&[m
+[32m+[m[32m      now < active.absoluteExpiresAt,[m
+[32m+[m[32m    );[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  accountFor(claims: VerifiedSession): DemoAccount | null {[m
+[32m+[m[32m    if (!this.isActive(claims)) return null;[m
+[32m+[m[32m    return this.sessions.get(claims.sessionId)?.account ?? null;[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  rotate(claims: VerifiedSession, now = Math.floor(Date.now() / 1000)): SessionIssue | null {[m
+[32m+[m[32m    const active = this.sessions.get(claims.sessionId);[m
+[32m+[m[32m    if (!active || !this.isActive(claims, now)) return null;[m
+[32m+[m[32m    if (now >= active.absoluteExpiresAt) {[m
+[32m+[m[32m      this.sessions.delete(claims.sessionId);[m
+[32m+[m[32m      return null;[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    const expiresIn = Math.min(JWT_TTL_SECONDS, active.absoluteExpiresAt - now);[m
+[32m+[m[32m    if (expiresIn <= 0) {[m
+[32m+[m[32m      this.sessions.delete(claims.sessionId);[m
+[32m+[m[32m      return null;[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    const issued = issueAccessToken(active.account, this.jwtSecret, active.sessionId, expiresIn, now);[m
+[32m+[m[32m    active.currentJti = issued.jti;[m
+[32m+[m[32m    active.currentExpiresAt = issued.expiresAt;[m
+[32m+[m[32m    return { ...issued, account: active.account };[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  revoke(claims: VerifiedSession): boolean {[m
+[32m+[m[32m    if (!this.isActive(claims)) return false;[m
+[32m+[m[32m    return this.sessions.delete(claims.sessionId);[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  private pruneExpired(now: number): void {[m
+[32m+[m[32m    for (const [sessionId, session] of this.sessions) {[m
+[32m+[m[32m      if (now >= session.currentExpiresAt || now >= session.absoluteExpiresAt) {[m
+[32m+[m[32m        this.sessions.delete(sessionId);[m
+[32m+[m[32m      }[m
+[32m+[m[32m    }[m
+[32m+[m[32m  }[m
+[32m+[m[32m}[m

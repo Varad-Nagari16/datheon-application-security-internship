@@ -43,15 +43,19 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+        working-directory: task4-public-endpoint-shielding
 
       - name: Lint OpenAPI contract with Spectral
         run: pnpm lint:openapi
+        working-directory: task4-public-endpoint-shielding
 
       - name: Run integration tests
         run: pnpm test
+        working-directory: task4-public-endpoint-shielding
 
       - name: Type-check TypeScript
         run: pnpm typecheck
+        working-directory: task4-public-endpoint-shielding
 
       - name: Start the synthetic loopback API
         run: |
@@ -65,27 +69,28 @@ jobs:
           done
           cat /tmp/task4-api.log
           exit 1
+        working-directory: task4-public-endpoint-shielding
 
       - name: Scan local OpenAPI service with OWASP ZAP
         run: |
-          mkdir -p artifacts
-          chmod 777 artifacts
+          mkdir -p task4-public-endpoint-shielding/artifacts
+          chmod 777 task4-public-endpoint-shielding/artifacts
           docker run --rm --network host \
             -v "$GITHUB_WORKSPACE:/zap/wrk/:rw" \
             -t ghcr.io/zaproxy/zaproxy:stable \
             zap-api-scan.py \
-              -t /zap/wrk/openapi.yaml \
+              -t /zap/wrk/task4-public-endpoint-shielding/openapi.yaml \
               -f openapi \
-              -c /zap/wrk/zap-rules.tsv \
+              -c /zap/wrk/task4-public-endpoint-shielding/zap-rules.tsv \
               -I \
-              -r /zap/wrk/artifacts/zap-report.html \
-              -J /zap/wrk/artifacts/zap-report.json
+              -r /zap/wrk/task4-public-endpoint-shielding/artifacts/zap-report.html \
+              -J /zap/wrk/task4-public-endpoint-shielding/artifacts/zap-report.json
 
       - name: Upload ZAP reports when created
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: task4-zap-api-report
-          path: artifacts/zap-report.*
+          path: task4-public-endpoint-shielding/artifacts/zap-report.*
           if-no-files-found: ignore
           retention-days: 14
